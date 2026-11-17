@@ -1,0 +1,6 @@
+{
+  "name": "Terra Observatory",
+  "description": "Interactive NASA-grade 3D Earth observatory exploring Earth's inner core, outer core, mantle, crust, five atmospheric layers, 4.54-billion-year geological history, and planetary systems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
