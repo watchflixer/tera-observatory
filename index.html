@@ -3,6 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Paints the browser toolbar (address bar) black on mobile, even if the
+         browser's own theme is white -->
+    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#000000" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000" />
+    <!-- iOS Safari: black status bar + standalone web-app look when added to Home Screen -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Terra Observatory — 3D Interactive Earth Encyclopedia</title>
     <meta
       name="description"
