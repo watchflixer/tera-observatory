@@ -21,6 +21,7 @@ import {
 } from '../utils/earthMath';
 import {
   disposeLeafletTextureCache,
+  getDetailPatchKey,
   loadLeafletDetailPatch,
   loadLeafletGlobeTexture,
   type LeafletDetailPatchResult,
@@ -236,6 +237,7 @@ export class EarthScene {
   private detailPatchMesh: THREE.Mesh;
   private detailPatchMat: THREE.MeshStandardMaterial;
   private activeDetailPatchKey = '';
+  private requestedDetailPatchKey = '';
   private cancelPhotoLoad: () => void = () => {};
   private cancelLeafletLoad: () => void = () => {};
   private cancelDetailPatchLoad: () => void = () => {};
@@ -286,6 +288,8 @@ export class EarthScene {
   private lastMs = performance.now();
   private frameId = 0;
   private loopRunning = false;
+  private wakePausedLoop: (() => void) | null = null;
+  private documentHidden = document.hidden;
   private disposed = false;
   private lastHoverCheck = 0;
   private lastZoomCheck = 0;
@@ -309,7 +313,9 @@ export class EarthScene {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.02;
-    this.renderer.setPixelRatio(this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
+    // Avoid rendering four physical pixels for every CSS pixel on high-DPI phones.
+    const pixelRatioCap = window.matchMedia('(pointer: coarse)').matches ? 1.5 : 2;
+    this.renderer.setPixelRatio(this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, pixelRatioCap));
     this.renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
     this.renderer.shadowMap.enabled = !this.isSoftwareGl;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -910,11 +916,11 @@ export class EarthScene {
     this.cancelLeafletLoad();
     this.cancelDetailPatchLoad();
     this.activeDetailPatchKey = '';
+    this.requestedDetailPatchKey = '';
     this.detailPatchMesh.visible = false;
     this.cancelLeafletLoad = loadLeafletGlobeTexture(layerId, showLabels, this.maxAniso, (res) => {
       if (this.disposed) return;
       this.leafletTex = res;
-      this.textures.historyMaps.cenozoic = res.map;
       this.updateSurfaceForEra();
     });
   }
@@ -950,12 +956,14 @@ export class EarthScene {
   }
 
   public updateState(next: SceneControlState): void {
+    const wasPaused = this.state.paused;
     const prevMode = this.state.mode;
     const prevEra = this.state.selectedHistory;
     const prevDossier = this.state.dossierOpen;
     const prevLeafletLayer = this.state.leafletBaseLayer;
     const prevLeafletLabels = this.state.showLeafletLabels;
     this.state = { ...next };
+    if (wasPaused && !next.paused && !this.documentHidden) this.wakePausedLoop?.();
 
     this.applyStateToScene();
 
@@ -1036,7 +1044,7 @@ export class EarthScene {
       crustMat.roughness = 0.85;
       this.nightUniforms.uUseNightLights.value = 1.0;
     } else {
-      crustMat.map = this.textures.historyMaps[eraId];
+      crustMat.map = this.textures.getHistoryMap(eraId);
       crustMat.roughnessMap = eraId === 'hadean' ? null : this.textures.roughnessMap;
       crustMat.bumpMap = this.textures.bumpMap;
       crustMat.bumpScale = 0.03;
@@ -1120,6 +1128,10 @@ export class EarthScene {
 
     if (this.state.mode !== 'systems' || this.state.cutawayDegrees > 1) {
       this.detailPatchMesh.visible = false;
+      if (this.requestedDetailPatchKey) {
+        this.cancelDetailPatchLoad();
+        this.requestedDetailPatchKey = '';
+      }
     }
 
     // Update Google-Earth click-to-inspect target pin
@@ -1196,10 +1208,17 @@ export class EarthScene {
       if (!this.userHasInteracted && !this.cameraAnimating) {
         this.camera.position.copy(getHomeCameraPosition(w / h));
       }
+      const pixelRatioCap = window.matchMedia('(pointer: coarse)').matches ? 1.5 : 2;
+      this.renderer.setPixelRatio(this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, pixelRatioCap));
       this.renderer.setSize(w, h);
-      this.renderer.render(this.scene, this.camera);
+      if (!this.state.paused && !this.documentHidden) this.renderer.render(this.scene, this.camera);
+    };
+    const onVisibilityChange = () => {
+      this.documentHidden = document.hidden;
+      if (!this.documentHidden && !this.state.paused) this.wakePausedLoop?.();
     };
     window.addEventListener('resize', onResize);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     const onPointerDown = (e: PointerEvent) => {
       this.pointerDownPos = { x: e.clientX, y: e.clientY };
@@ -1291,6 +1310,7 @@ export class EarthScene {
 
     this.cleanupListeners = () => {
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointermove', onPointerMove);
@@ -1330,11 +1350,17 @@ export class EarthScene {
         return;
       }
 
-      if (this.state.paused) {
+      if (this.state.paused || this.documentHidden) {
         this.lastMs = performance.now();
         this.frameId = window.setTimeout(tick, 220);
+        this.wakePausedLoop = () => {
+          window.clearTimeout(this.frameId);
+          this.wakePausedLoop = null;
+          this.frameId = requestAnimationFrame(tick);
+        };
         return;
       }
+      this.wakePausedLoop = null;
 
       const now = performance.now();
       const delta = Math.min((now - this.lastMs) / 1000, 0.1);
@@ -1448,10 +1474,13 @@ export class EarthScene {
           this.callbacks.onCameraZoomUpdate({ centerCoords, altitudeKm, leafletZoom });
         }
 
-        if (leafletZoom >= 4 && this.state.cutawayDegrees < 2) {
-          if (now - this.lastDetailTileTrigger > 550) {
+        if (leafletZoom >= 4 && this.state.cutawayDegrees <= 1) {
+          const key = getDetailPatchKey(this.state.leafletBaseLayer, this.state.showLeafletLabels, centerCoords.lat, centerCoords.lon, leafletZoom);
+          // Do not cancel and restart the same 4×4 tile request every frame check.
+          if (key !== this.requestedDetailPatchKey && now - this.lastDetailTileTrigger > 550) {
             this.lastDetailTileTrigger = now;
             this.cancelDetailPatchLoad();
+            this.requestedDetailPatchKey = key;
             this.cancelDetailPatchLoad = loadLeafletDetailPatch(
               this.state.leafletBaseLayer,
               this.state.showLeafletLabels,
@@ -1459,11 +1488,22 @@ export class EarthScene {
               centerCoords.lon,
               leafletZoom,
               this.maxAniso,
-              (patch) => this.applyDetailPatch(patch)
+              (patch) => this.applyDetailPatch(patch),
+              () => {
+                if (this.requestedDetailPatchKey === key) {
+                  this.requestedDetailPatchKey = '';
+                  // Back off after a network failure rather than continuously retrying.
+                  this.lastDetailTileTrigger = performance.now() + 3450;
+                }
+              }
             );
           }
-        } else if (this.detailPatchMesh.visible) {
+        } else {
           this.detailPatchMesh.visible = false;
+          if (this.requestedDetailPatchKey) {
+            this.cancelDetailPatchLoad();
+            this.requestedDetailPatchKey = '';
+          }
         }
       }
 
@@ -1494,6 +1534,7 @@ export class EarthScene {
 
   public dispose(): void {
     this.disposed = true;
+    this.wakePausedLoop = null;
     this.cancelPhotoLoad();
     this.cancelLeafletLoad();
     this.cancelDetailPatchLoad();

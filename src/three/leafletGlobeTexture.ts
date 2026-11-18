@@ -1,7 +1,7 @@
 import L from 'leaflet';
 import * as THREE from 'three';
 import { LEAFLET_BASE_LAYERS, type LeafletBaseLayerId } from '../data/earthData';
-import { latLonToTileXY, latToMercatorNormY, tileBoundsToLatLon } from '../utils/earthMath';
+import { getDetailTileWindow, latToMercatorNormY, tileBoundsToLatLon } from '../utils/earthMath';
 
 export interface LeafletGlobeTextureResult {
   map: THREE.CanvasTexture;
@@ -219,6 +219,11 @@ export function loadLeafletGlobeTexture(
   };
 }
 
+export function getDetailPatchKey(layerId: LeafletBaseLayerId, showOverlayLabels: boolean, lat: number, lon: number, zoom: number): string {
+  const { clampedZoom, txStart, tyStart } = getDetailTileWindow(lat, lon, zoom);
+  return `${layerId}:${showOverlayLabels ? 'L' : 'C'}:z${clampedZoom}:x${txStart}:y${tyStart}`;
+}
+
 /**
  * Loads a localized high-resolution Leaflet tile patch (z=4..z=6) centered on the user's
  * zoomed-in camera target, reprojected onto a sub-sphere patch for Google-Earth-like zoom crispness.
@@ -230,27 +235,12 @@ export function loadLeafletDetailPatch(
   centerLon: number,
   zoom: number,
   maxAnisotropy: number,
-  onReady: (patch: LeafletDetailPatchResult) => void
+  onReady: (patch: LeafletDetailPatchResult) => void,
+  onFailure?: () => void
 ): () => void {
   let cancelled = false;
-  const clampedZoom = Math.max(4, Math.min(6, zoom));
-  const clampedLat = Math.max(-76, Math.min(76, centerLat));
-  const tileCount = 1 << clampedZoom;
-  const { x: cx, y: cy } = latLonToTileXY(clampedLat, centerLon, clampedZoom);
-
-  // Compute fractional tile indices so our 4x4 window centers symmetrically around the camera target
-  const wrappedLon = ((((centerLon + 180) % 360) + 360) % 360) - 180;
-  const fx = ((wrappedLon + 180) / 360) * tileCount;
-  const fy = latToMercatorNormY(clampedLat) * tileCount;
-  const anchorX = Number.isFinite(fx) ? Math.round(fx) : cx;
-  const anchorY = Number.isFinite(fy) ? Math.round(fy) : cy;
-
-  const txStart = anchorX - 2;
-  const txEnd = txStart + 3;
-  const tyStart = Math.max(0, Math.min(tileCount - 4, anchorY - 2));
-  const tyEnd = Math.min(tileCount - 1, tyStart + 3);
-
-  const key = `${layerId}:${showOverlayLabels ? 'L' : 'C'}:z${clampedZoom}:x${txStart}:y${tyStart}`;
+  const { clampedZoom, tileCount, txStart, txEnd, tyStart, tyEnd } = getDetailTileWindow(centerLat, centerLon, zoom);
+  const key = getDetailPatchKey(layerId, showOverlayLabels, centerLat, centerLon, zoom);
   const cached = detailPatchCache.get(key);
   if (cached) {
     onReady(cached);
@@ -296,7 +286,10 @@ export function loadLeafletDetailPatch(
   Promise.all(jobs).then((tiles) => {
     if (cancelled) return;
     const loaded = tiles.filter((t) => t.base !== null).length;
-    if (loaded === 0) return;
+    if (loaded === 0) {
+      onFailure?.();
+      return;
+    }
 
     const mercW = cols * tileSize;
     const mercH = rows * tileSize;
@@ -356,6 +349,8 @@ export function loadLeafletDetailPatch(
     }
     detailPatchCache.set(key, result);
     onReady(result);
+  }).catch(() => {
+    if (!cancelled) onFailure?.();
   });
 
   return () => {

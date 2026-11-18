@@ -8,6 +8,7 @@ import {
   estimateAtmospherePressurePa,
   formatGeologicalTime,
   getExplodedOffset,
+  getDetailTileWindow,
   interpolateAtmosphereTemp,
   latLonToTileXY,
   latLonToVector3,
@@ -231,3 +232,18 @@ test('filterLifeCatalog filters cleanly by query, category, status, and geologic
 });
 
 
+
+test('detail-tile windows remain stable within a tile region and clamp zoom and latitude', () => {
+  const equator = getDetailTileWindow(0, 0, 4);
+  assert.deepEqual(equator, { clampedZoom: 4, tileCount: 16, txStart: 6, txEnd: 9, tyStart: 6, tyEnd: 9 });
+  assert.deepEqual(getDetailTileWindow(0.1, 1, 4), equator);
+  assert.notEqual(getDetailTileWindow(0, 30, 4).txStart, equator.txStart);
+  assert.deepEqual(getDetailTileWindow(0, 180, 4), getDetailTileWindow(0, -180, 4));
+  const north = getDetailTileWindow(90, 0, 9);
+  assert.equal(north.clampedZoom, 6);
+  assert.equal(north.tileCount, 64);
+  assert.ok(north.tyStart >= 0 && north.tyEnd < north.tileCount);
+  const south = getDetailTileWindow(-90, 0, 1);
+  assert.equal(south.clampedZoom, 4);
+  assert.ok(south.tyStart >= 0 && south.tyEnd < south.tileCount);
+});
