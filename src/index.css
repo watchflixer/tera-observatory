@@ -39,7 +39,14 @@ body,
 /* Stack the species details below the menu only on portrait phone-sized screens. */
 @media (max-width: 767px) and (orientation: portrait) {
   .extinct-header-details {
+    width: 100%;
     flex-direction: column;
+  }
+
+  .extinct-header-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
   }
 }
 

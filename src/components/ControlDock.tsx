@@ -30,8 +30,6 @@ interface ControlDockProps {
   onToggleTectonics: () => void;
   showMagnetosphere: boolean;
   onToggleMagnetosphere: () => void;
-  showAxis: boolean;
-  onToggleAxis: () => void;
   showLandmarks: boolean;
   onToggleLandmarks: () => void;
   showSatellites: boolean;
@@ -78,8 +76,6 @@ export function ControlDock(props: ControlDockProps) {
     onToggleTectonics,
     showMagnetosphere,
     onToggleMagnetosphere,
-    showAxis,
-    onToggleAxis,
     showLandmarks,
     onToggleLandmarks,
     showSatellites,
@@ -353,7 +349,6 @@ export function ControlDock(props: ControlDockProps) {
                 <ToggleButton active={showAsteroids} onClick={onToggleAsteroids} label="Asteroids" />
                 <ToggleButton active={showTectonics} onClick={onToggleTectonics} label="Tectonic Plates" />
                 <ToggleButton active={showMagnetosphere} onClick={onToggleMagnetosphere} label="Magnetosphere" />
-                <ToggleButton active={showAxis} onClick={onToggleAxis} label="Axial Tilt 23.44°" />
                 <ToggleButton active={showClouds} onClick={onToggleClouds} label="Cloud Cover" />
                 <ToggleButton active={autoRotate} onClick={onToggleAutoRotate} label="Earth Rotation" />
               </div>

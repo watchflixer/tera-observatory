@@ -4,8 +4,8 @@ import {
   ChevronRight,
   Menu,
   Image as ImageIcon,
+  Pause,
   Play,
-  RotateCcw,
   Volume2,
   VolumeX,
   X,
@@ -54,23 +54,54 @@ export function ExtinctAtlasModal({
     EXTINCT_SPECIMENS.find((specimen) => specimen.id === selectedSpecimenId) ?? EXTINCT_SPECIMENS[0];
 
   const [muted, setMuted] = useState<boolean>(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [videoError, setVideoError] = useState<boolean>(false);
   const isVideoShowcase = Boolean(selectedSpecimen.videoUrl);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [dockCollapsed, setDockCollapsed] = useState<boolean>(false);
+  const [usesMobileSidebar, setUsesMobileSidebar] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767.98px)').matches
+  );
 
-  // Escape closes modal
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767.98px)');
+    const update = () => setUsesMobileSidebar(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  // Give back navigation a sidebar-only step whenever the menu button is visible.
+  useEffect(() => {
+    if (!open || !mobileSidebarOpen || !usesMobileSidebar) return;
+    const marker = `extinct-sidebar-${Date.now()}-${Math.random()}`;
+    const currentState = window.history.state;
+    const state = currentState && typeof currentState === 'object' ? currentState : {};
+    window.history.pushState({ ...state, extinctSidebarMarker: marker }, '');
+    const onBack = () => setMobileSidebarOpen(false);
+    window.addEventListener('popstate', onBack);
+    return () => {
+      window.removeEventListener('popstate', onBack);
+      if (window.history.state?.extinctSidebarMarker === marker) window.history.back();
+    };
+  }, [open, mobileSidebarOpen, usesMobileSidebar]);
+
+  useEffect(() => {
+    if (!open || !usesMobileSidebar) setMobileSidebarOpen(false);
+  }, [open, usesMobileSidebar]);
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        if (usesMobileSidebar && mobileSidebarOpen) setMobileSidebarOpen(false);
+        else onClose();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, usesMobileSidebar, mobileSidebarOpen]);
 
   // Each time the archive opens, start with sound enabled by default.
   useEffect(() => {
@@ -86,6 +117,7 @@ export function ExtinctAtlasModal({
     if (!open || !isVideoShowcase || !video) return;
 
     const attempt = ++playAttemptRef.current;
+    setVideoPlaying(false);
     video.muted = preferredMutedRef.current;
     setMuted(video.muted);
     setAutoplayBlocked(false);
@@ -121,11 +153,19 @@ export function ExtinctAtlasModal({
     setMobileSidebarOpen(false);
   }, []);
 
-  const handleReplay = useCallback(() => {
+  const handleTogglePlayback = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    video.currentTime = 0;
-    void video.play().catch(() => {});
+    const attempt = ++playAttemptRef.current;
+    if (!video.paused) {
+      video.pause();
+      return;
+    }
+    setVideoError(false);
+    void video.play().catch((error: unknown) => {
+      if (attempt !== playAttemptRef.current || videoRef.current !== video) return;
+      if (!(error instanceof DOMException && error.name === 'AbortError')) setVideoError(true);
+    });
   }, []);
 
   const handleCreatureSound = useCallback(() => {
@@ -137,19 +177,10 @@ export function ExtinctAtlasModal({
     const video = videoRef.current;
     if (!video) return;
     const next = !video.muted;
-    const attempt = ++playAttemptRef.current;
     preferredMutedRef.current = next;
     video.muted = next;
     setMuted(next);
     setAutoplayBlocked(false);
-    if (!next) {
-      void video.play().catch(() => {
-        if (attempt !== playAttemptRef.current || videoRef.current !== video || video.muted) return;
-        video.muted = true;
-        setMuted(true);
-        setAutoplayBlocked(true);
-      });
-    }
   }, []);
 
   if (!open) return null;
@@ -189,8 +220,11 @@ export function ExtinctAtlasModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
-            aria-label="Close Extinct Archive"
+            onClick={() => {
+              if (usesMobileSidebar && mobileSidebarOpen) setMobileSidebarOpen(false);
+              else onClose();
+            }}
+            aria-label={usesMobileSidebar && mobileSidebarOpen ? 'Hide sidebar' : 'Close Extinct Archive'}
             className="p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -313,6 +347,9 @@ export function ExtinctAtlasModal({
             aria-label={`${selectedSpecimen.name} in ${selectedSpecimen.habitat}`}
             className="absolute inset-0 z-0 h-full w-full bg-black object-contain"
             onCanPlay={() => setVideoError(false)}
+            onPlay={() => setVideoPlaying(true)}
+            onPause={() => setVideoPlaying(false)}
+            onEnded={() => setVideoPlaying(false)}
             onError={() => setVideoError(true)}
           />
         )}
@@ -330,7 +367,7 @@ export function ExtinctAtlasModal({
             aria-live="polite"
             className="pointer-events-none absolute top-24 left-1/2 z-20 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-lg border border-white/15 bg-black/80 px-3 py-2 text-center text-xs text-white shadow-xl"
           >
-            {selectedSpecimen.name} video did not start. Choose Replay Video to try again.
+            {selectedSpecimen.name} video did not start. Choose Play Video to try again.
           </div>
         )}
 
@@ -358,7 +395,7 @@ export function ExtinctAtlasModal({
 
         {/* Top Header Overlay (no backdrop-blur over WebGL) */}
         <div className="absolute top-9 sm:top-11 left-3 right-3 z-20 flex items-start justify-between gap-3 pointer-events-none">
-          <div className="extinct-header-details pointer-events-auto flex min-w-0 max-w-xl items-start gap-2">
+          <div className="extinct-header-details pointer-events-auto flex min-w-0 max-w-full items-start gap-2">
             <button
               type="button"
               onClick={() => setMobileSidebarOpen((v) => !v)}
@@ -369,7 +406,7 @@ export function ExtinctAtlasModal({
             </button>
 
             {!dockCollapsed && (
-              <div className="px-3.5 py-2.5 rounded-xl bg-[#141414]/90 border border-neutral-800">
+              <div className="min-w-0 w-max max-w-full break-words px-3.5 py-2.5 rounded-xl bg-[#141414]/90 border border-neutral-800">
                 <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium">
                   <span className="text-[#e0a43b] font-semibold uppercase tracking-wide">
                     {phaseLabel}
@@ -390,7 +427,7 @@ export function ExtinctAtlasModal({
             )}
           </div>
 
-          <div className="pointer-events-auto flex items-center gap-2 shrink-0">
+          <div className="extinct-header-actions pointer-events-auto flex items-center gap-2 shrink-0">
             {isVideoShowcase && <button
               type="button"
               onClick={handleToggleMute}
@@ -431,11 +468,11 @@ export function ExtinctAtlasModal({
                 {isVideoShowcase && <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleReplay}
+                    onClick={handleTogglePlayback}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-[#e0a43b] text-black hover:bg-[#ebb758] transition-colors"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    Replay Video
+                    {videoPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                    {videoPlaying ? 'Pause Video' : 'Play Video'}
                   </button>
 
                 </div>}
