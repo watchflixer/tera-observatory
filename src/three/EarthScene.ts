@@ -48,7 +48,6 @@ export interface SceneControlState {
   showClouds: boolean;
   showTectonics: boolean;
   showMagnetosphere: boolean;
-  showAxis: boolean;
   showLandmarks: boolean;
   showSatellites: boolean;
   showAsteroids: boolean;
@@ -263,7 +262,6 @@ export class EarthScene {
   private atmosphereMaterials = new Map<AtmosphereLayerId, THREE.ShaderMaterial>();
   private auroraGroup: THREE.Group;
   private magnetosphereGroup: THREE.Group;
-  private axisGroup: THREE.Group;
   private spaceObjects: SpaceObjectsSystem;
   private landmarksGroup: THREE.Group;
   private landmarkPins = new Map<string, { group: THREE.Group; ring: THREE.Mesh; core: THREE.Mesh }>();
@@ -496,10 +494,6 @@ export class EarthScene {
     // Magnetosphere field lines
     this.magnetosphereGroup = this.buildMagnetosphere();
     this.earthTiltGroup.add(this.magnetosphereGroup);
-
-    // Axial tilt rod & equator calibration ring
-    this.axisGroup = this.buildAxisGuides();
-    this.earthTiltGroup.add(this.axisGroup);
 
     // Upgraded Composite Satellites (ISS, Hubble, Sentinel) & Near-Earth Asteroids
     this.spaceObjects = createSpaceObjectsSystem(this.maxAniso);
@@ -744,30 +738,6 @@ export class EarthScene {
         group.add(line);
       }
     }
-
-    return group;
-  }
-
-  private buildAxisGuides(): THREE.Group {
-    const group = new THREE.Group();
-    const rodGeo = new THREE.CylinderGeometry(0.012, 0.012, EARTH_RADIUS * 2.65, 12);
-    const rodMat = new THREE.MeshStandardMaterial({
-      color: '#94a3b8',
-      metalness: 0.75,
-      roughness: 0.3,
-    });
-    const rod = new THREE.Mesh(rodGeo, rodMat);
-    group.add(rod);
-
-    const eqGeo = new THREE.TorusGeometry(EARTH_RADIUS * 1.15, 0.008, 8, 96);
-    const eqMat = new THREE.MeshBasicMaterial({
-      color: '#38bdf8',
-      transparent: true,
-      opacity: 0.45,
-    });
-    const eq = new THREE.Mesh(eqGeo, eqMat);
-    eq.rotation.x = Math.PI / 2;
-    group.add(eq);
 
     return group;
   }
@@ -1097,7 +1067,6 @@ export class EarthScene {
       !(this.state.mode === 'history' && this.state.selectedHistory === 'hadean');
     this.tectonicMesh.visible = this.state.showTectonics && this.state.mode !== 'history';
     this.magnetosphereGroup.visible = this.state.showMagnetosphere;
-    this.axisGroup.visible = this.state.showAxis || this.state.mode === 'systems';
     this.landmarksGroup.visible =
       this.state.mode === 'systems' &&
       this.state.showLandmarks &&

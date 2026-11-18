@@ -56,7 +56,6 @@ export default function App() {
   const [showClouds, setShowClouds] = useState<boolean>(true);
   const [showTectonics, setShowTectonics] = useState<boolean>(false);
   const [showMagnetosphere, setShowMagnetosphere] = useState<boolean>(false);
-  const [showAxis, setShowAxis] = useState<boolean>(false);
   const [showLandmarks, setShowLandmarks] = useState<boolean>(false);
   const [showSatellites, setShowSatellites] = useState<boolean>(false);
   const [showAsteroids, setShowAsteroids] = useState<boolean>(true);
@@ -334,7 +333,6 @@ export default function App() {
       showClouds,
       showTectonics,
       showMagnetosphere,
-      showAxis,
       showLandmarks,
       showSatellites,
       showAsteroids,
@@ -356,7 +354,6 @@ export default function App() {
       showClouds,
       showTectonics,
       showMagnetosphere,
-      showAxis,
       showLandmarks,
       showSatellites,
       showAsteroids,
@@ -441,8 +438,6 @@ export default function App() {
         onToggleTectonics={() => setShowTectonics((v) => !v)}
         showMagnetosphere={showMagnetosphere}
         onToggleMagnetosphere={() => setShowMagnetosphere((v) => !v)}
-        showAxis={showAxis}
-        onToggleAxis={() => setShowAxis((v) => !v)}
         showLandmarks={showLandmarks}
         onToggleLandmarks={() => setShowLandmarks((v) => !v)}
         showSatellites={showSatellites}
