@@ -33,18 +33,30 @@ export function ExtinctAtlasModal({
 }: ExtinctAtlasModalProps) {
   const canvasMountRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<ExtinctPrehistoricScene | null>(null);
+  const dodoVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoEntryRef = useRef(false);
 
   const [expandedCategory, setExpandedCategory] = useState<ExtinctSidebarCategoryId | null>(
     'animals'
   );
-  const [selectedSpecimen, setSelectedSpecimen] = useState<ExtinctSpecimen>(
-    () => EXTINCT_SPECIMENS[0]
+  // Keep the selection keyed by ID so hot updates always resolve to the current catalog entry.
+  // Accept a previous object value during Fast Refresh so the preview upgrades without losing selection.
+  const [selectedSpecimenSelection, setSelectedSpecimenSelection] = useState<ExtinctSpecimen | string>(
+    () => EXTINCT_SPECIMENS[0].id
   );
+  const selectedSpecimenId =
+    typeof selectedSpecimenSelection === 'string'
+      ? selectedSpecimenSelection
+      : selectedSpecimenSelection.id;
+  const selectedSpecimen =
+    EXTINCT_SPECIMENS.find((specimen) => specimen.id === selectedSpecimenId) ?? EXTINCT_SPECIMENS[0];
   const selectedSpecimenRef = useRef<ExtinctSpecimen>(selectedSpecimen);
   selectedSpecimenRef.current = selectedSpecimen;
 
   const [clipPhase, setClipPhase] = useState<ExtinctClipPhase>('approach');
   const [muted, setMuted] = useState<boolean>(false);
+  const [videoError, setVideoError] = useState<boolean>(false);
+  const isVideoShowcase = Boolean(selectedSpecimen.videoUrl);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
   const [dockCollapsed, setDockCollapsed] = useState<boolean>(false);
 
@@ -60,9 +72,9 @@ export function ExtinctAtlasModal({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, onClose]);
 
-  // Mount Three.js 3D Forest + Animated Extinct Creature scene once while modal is open
+  // Mount the Three.js scene only when the selected specimen is not using source video.
   useEffect(() => {
-    if (!open || !canvasMountRef.current) return;
+    if (!open || isVideoShowcase || !canvasMountRef.current) return;
 
     const scene = new ExtinctPrehistoricScene(
       canvasMountRef.current,
@@ -70,9 +82,11 @@ export function ExtinctAtlasModal({
       {
         onPhaseChange: (phase) => setClipPhase(phase),
         onFootstep: (proximity, heavy) => {
+          if (selectedSpecimenRef.current.videoUrl) return;
           prehistoricAudio.playFootstep(proximity, heavy);
         },
         onRoarStart: () => {
+          if (selectedSpecimenRef.current.videoUrl) return;
           prehistoricAudio.playCreatureVoice(selectedSpecimenRef.current.soundProfile);
         },
       }
@@ -83,7 +97,31 @@ export function ExtinctAtlasModal({
       scene.dispose();
       sceneRef.current = null;
     };
-  }, [open]);
+  }, [open, isVideoShowcase]);
+
+  useEffect(() => {
+    if (!open || !isVideoShowcase) {
+      videoEntryRef.current = false;
+      return;
+    }
+    if (videoEntryRef.current) return;
+    videoEntryRef.current = true;
+    if (!muted) {
+      prehistoricAudio.setMuted(true);
+      setMuted(true);
+    }
+  }, [open, isVideoShowcase, muted]);
+
+  useEffect(() => {
+    const video = dodoVideoRef.current;
+    if (!open || !isVideoShowcase || !video) return;
+
+    // Start source clips muted so browser autoplay policies allow the specimen video to play.
+    video.muted = true;
+    void video.play().catch(() => {});
+
+    return () => video.pause();
+  }, [open, isVideoShowcase]);
 
   const handleSelectCategory = useCallback((catId: ExtinctSidebarCategoryId) => {
     prehistoricAudio.unlock();
@@ -92,22 +130,46 @@ export function ExtinctAtlasModal({
 
   const handleSelectSpecimen = useCallback((specimen: ExtinctSpecimen) => {
     prehistoricAudio.unlock();
-    setSelectedSpecimen(specimen);
+    setSelectedSpecimenSelection(specimen.id);
     selectedSpecimenRef.current = specimen;
+    setVideoError(false);
     setExpandedCategory(specimen.category);
     setClipPhase('approach');
     setMobileSidebarOpen(false);
+
+    if (specimen.videoUrl) {
+      // Autoplay the source video muted; the existing audio toggle can enable its soundtrack.
+      prehistoricAudio.setMuted(true);
+      setMuted(true);
+      return;
+    }
     sceneRef.current?.loadSpecimen(specimen);
   }, []);
 
   const handleReplay = useCallback(() => {
     prehistoricAudio.unlock();
     setClipPhase('approach');
+    const video = dodoVideoRef.current;
+    if (selectedSpecimenRef.current.videoUrl && video) {
+      video.currentTime = 0;
+      void video.play().catch(() => {});
+      return;
+    }
     sceneRef.current?.replayClip();
   }, []);
 
   const handlePlaySoundNow = useCallback(() => {
     prehistoricAudio.unlock();
+    const video = dodoVideoRef.current;
+    if (selectedSpecimenRef.current.videoUrl && video) {
+      if (muted) {
+        prehistoricAudio.setMuted(false);
+        setMuted(false);
+      }
+      video.muted = false;
+      void video.play().catch(() => {});
+      return;
+    }
     if (muted) {
       prehistoricAudio.setMuted(false);
       setMuted(false);
@@ -127,19 +189,35 @@ export function ExtinctAtlasModal({
   const isBotanical =
     selectedSpecimen.archetype === 'flower' || selectedSpecimen.archetype === 'tree';
 
-  const phaseLabel = isBotanical
-    ? 'Forest Habitat View'
-    : clipPhase === 'approach'
-      ? 'Running Toward Screen'
-      : clipPhase === 'roar'
-        ? 'Roaring!'
-        : 'Forest Clearing';
+  const phaseLabel = (() => {
+    if (isVideoShowcase) return 'Dodo Field Video';
+    if (isBotanical) return 'Ancient Habitat Study';
+
+    if (selectedSpecimen.category === 'marine') {
+      if (clipPhase === 'approach') return 'Swimming Toward Camera';
+      if (clipPhase === 'roar') return 'Jaw Display';
+      return 'Deep-Water Encounter';
+    }
+    if (selectedSpecimen.archetype === 'pterosaur') {
+      if (clipPhase === 'approach') return 'Flying Toward Camera';
+      if (clipPhase === 'roar') return 'Calling Above the Canopy';
+      return 'Canopy Flyby';
+    }
+    if (selectedSpecimen.category === 'humans' || selectedSpecimen.archetype === 'dodo') {
+      if (clipPhase === 'approach') return 'Moving Toward Camera';
+      if (clipPhase === 'roar') return 'Calling!';
+      return 'Cinematic Standoff';
+    }
+    if (clipPhase === 'approach') return 'Running Toward Screen';
+    if (clipPhase === 'roar') return 'Roaring!';
+    return 'Cinematic Standoff';
+  })();
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Extinct Prehistoric Forest Showcase"
+      aria-label="Extinct Species Cinematic Field Showcase"
       className="fixed inset-0 z-50 flex bg-[#000000] text-neutral-100 select-none"
     >
       {/* Left Sidebar: Categories -> Sublist of Extinct Species */}
@@ -153,7 +231,7 @@ export function ExtinctAtlasModal({
         <div className="px-4 py-3 border-b border-neutral-800 flex items-center justify-between gap-2 shrink-0">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wider text-[#e0a43b]">
-              Prehistoric Forest
+              Deep Time Field Archive
             </div>
             <h2 className="text-sm font-semibold text-white">Extinct Species Archive</h2>
           </div>
@@ -216,10 +294,21 @@ export function ExtinctAtlasModal({
                               : 'bg-[#181818] border-neutral-800/80 text-neutral-300 hover:text-white hover:border-neutral-600'
                           }`}
                         >
-                          <div className="min-w-0">
-                            <div className="text-xs font-medium truncate">{item.name}</div>
-                            <div className="text-[10px] text-neutral-400 truncate mt-0.5">
-                              {item.livedSpan}
+                          <div className="flex items-center gap-2 min-w-0">
+                            {item.imageUrl && (
+                              <img
+                                src={item.imageUrl}
+                                alt=""
+                                loading="lazy"
+                                decoding="async"
+                                className="h-10 w-10 shrink-0 rounded-md border border-white/10 object-cover"
+                              />
+                            )}
+                            <div className="min-w-0">
+                              <div className="text-xs font-medium truncate">{item.name}</div>
+                              <div className="text-[10px] text-neutral-400 truncate mt-0.5">
+                                {item.livedSpan}
+                              </div>
                             </div>
                           </div>
                           <Play
@@ -239,20 +328,45 @@ export function ExtinctAtlasModal({
 
         {/* Footer note */}
         <div className="px-3.5 py-2.5 border-t border-neutral-800 text-[11px] text-neutral-400 shrink-0">
-          Select any category and click a species to watch it charge out of the forest with audio.
+          Choose a species for a habitat-matched animated scene: run, fly, swim, call, or sway as it fits.
         </div>
       </aside>
 
-      {/* Main 3D Prehistoric Forest Stage */}
+      {/* Animated cinematic specimen stage */}
       <div className="relative flex-1 min-w-0 h-full overflow-hidden bg-[#0e140c]">
-        {/* Isolated WebGL Canvas Mount */}
         <div
           ref={canvasMountRef}
-          aria-label="3D Prehistoric Forest Viewport"
+          aria-label={`Animated cinematic scene: ${selectedSpecimen.name} in ${selectedSpecimen.habitat}`}
           data-specimen={selectedSpecimen.id}
           data-clip-phase={clipPhase}
-          className="absolute inset-0"
+          aria-hidden={isVideoShowcase}
+          className={`absolute inset-0 ${isVideoShowcase ? 'invisible' : ''}`}
         />
+        {isVideoShowcase && selectedSpecimen.videoUrl && (
+          <video
+            ref={dodoVideoRef}
+            src={selectedSpecimen.videoUrl}
+            poster={selectedSpecimen.imageUrl}
+            autoPlay
+            loop
+            playsInline
+            muted={muted}
+            preload="auto"
+            aria-label={`${selectedSpecimen.name} in ${selectedSpecimen.habitat}`}
+            className="absolute inset-0 z-0 h-full w-full bg-black object-contain"
+            onCanPlay={() => setVideoError(false)}
+            onError={() => setVideoError(true)}
+          />
+        )}
+        {isVideoShowcase && videoError && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="pointer-events-none absolute top-24 left-1/2 z-20 max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-lg border border-white/15 bg-black/80 px-3 py-2 text-center text-xs text-white shadow-xl"
+          >
+            Dodo video did not start. Choose Replay Dodo Video to try again.
+          </div>
+        )}
 
         {/* Subtle 35mm lens vignette, static film grain & theatrical widescreen matte bars */}
         <div
@@ -355,7 +469,7 @@ export function ExtinctAtlasModal({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-[#e0a43b] text-black hover:bg-[#ebb758] transition-colors"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    Replay Run & Roar
+                    {isVideoShowcase ? 'Replay Dodo Video' : 'Replay Run & Roar'}
                   </button>
 
                   <button
@@ -364,7 +478,7 @@ export function ExtinctAtlasModal({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-[#222222] text-white border border-[#e0a43b]/80 hover:bg-[#2c2c2c] transition-colors"
                   >
                     <Volume2 className="w-3.5 h-3.5 text-[#e0a43b]" />
-                    Roar / Sound
+                    {isVideoShowcase ? (muted ? 'Enable Video Audio' : 'Video Audio On') : 'Roar / Sound'}
                   </button>
                 </div>
 

@@ -1,0 +1,2 @@
+# Prevents GitHub Pages from processing the site with Jekyll,
+# so all build assets (including files with underscores) are served as-is.

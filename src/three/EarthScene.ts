@@ -74,6 +74,47 @@ export interface SceneCallbacks {
 
 const EARTH_RADIUS = 2.0;
 
+// Opening / reset framing: well farther out than the old 7.16-unit view
+// (~10.3 units) so the globe reads smaller on first load, on every device.
+const HOME_CAMERA_POSITION = new THREE.Vector3(5.89, 2.56, 8.06);
+const CAMERA_VERTICAL_FOV_DEG = 42;
+
+// Mode framing presets — each ~12% farther out than the original framing so
+// every mode opens a little more zoomed out (same viewing angles as before).
+const CUTAWAY_CAMERA_POSITION = new THREE.Vector3(4.59, 1.96, 5.49);
+const ATMOSPHERE_CAMERA_POSITION = new THREE.Vector3(5.38, 2.13, 6.16);
+const SYSTEMS_CAMERA_POSITION = new THREE.Vector3(5.71, 2.35, 6.61);
+
+// Distance at which the globe fits the screen width for a given aspect ratio.
+function getFitDistance(aspect: number): number {
+  const halfVerticalFov = THREE.MathUtils.degToRad(CAMERA_VERTICAL_FOV_DEG / 2);
+  const halfHorizontalFov = Math.atan(Math.tan(halfVerticalFov) * Math.max(aspect, 0.2));
+  return (EARTH_RADIUS / Math.sin(halfHorizontalFov)) * 1.25;
+}
+
+// On narrow portrait screens (Android / iPhone) the horizontal field of view
+// is much tighter, so the same camera distance crops the globe's left/right
+// edges. Push the home camera farther out until the globe fits the width.
+function getHomeCameraPosition(aspect: number): THREE.Vector3 {
+  const baseDistance = HOME_CAMERA_POSITION.length();
+  const distance = THREE.MathUtils.clamp(
+    Math.max(baseDistance, getFitDistance(aspect)),
+    baseDistance,
+    13.0
+  );
+  return HOME_CAMERA_POSITION.clone().setLength(distance);
+}
+
+// Push a framing position farther out when needed so the globe fits the
+// screen width on narrow portrait screens (phones).
+function fitCameraToWidth(pos: THREE.Vector3, aspect: number): THREE.Vector3 {
+  const fitDistance = getFitDistance(aspect);
+  if (pos.length() < fitDistance) {
+    pos.setLength(Math.min(fitDistance, 13.0));
+  }
+  return pos;
+}
+
 // Pre-allocated scratch vectors to avoid GC pressure inside render loop
 const _camGoalPos = new THREE.Vector3();
 const _camGoalTarget = new THREE.Vector3();
@@ -238,6 +279,7 @@ export class EarthScene {
   private smoothTiltRad = (23.44 * Math.PI) / 180;
 
   private cameraAnimating = false;
+  private userHasInteracted = false;
   private camAnimStartMs = 0;
   private camAnimDurationMs = 950;
   private camStartRadius = 6.5;
@@ -287,8 +329,8 @@ export class EarthScene {
 
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
-    this.camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 200);
-    this.camera.position.set(4.1, 1.75, 5.6);
+    this.camera = new THREE.PerspectiveCamera(CAMERA_VERTICAL_FOV_DEG, width / height, 0.1, 200);
+    this.camera.position.copy(getHomeCameraPosition(width / height));
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = !this.isSoftwareGl;
@@ -300,6 +342,7 @@ export class EarthScene {
     this.controls.target.set(initialState.dossierOpen && width >= 1024 ? 0.52 : 0, -0.22, 0);
     this.controls.addEventListener('start', () => {
       this.cameraAnimating = false;
+      this.userHasInteracted = true;
     });
 
     // Lighting rig: calibrated solar key for crisp terminator, cool space fill, subtle rim, core light
@@ -1139,6 +1182,7 @@ export class EarthScene {
     distanceOverride?: number
   ): void {
     const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
     const isCloseTarget = preset === 'location' || preset === 'landmark';
     if (isCloseTarget) {
       this.state.autoRotate = false;
@@ -1149,12 +1193,12 @@ export class EarthScene {
 
     if (preset === 'cutaway') {
       // Frame the cutaway quadrant directly in front-right +X/+Z
-      _camGoalPos.set(4.1, 1.75, 4.9);
+      _camGoalPos.copy(fitCameraToWidth(CUTAWAY_CAMERA_POSITION.clone(), width / height));
       this.earthSpinGroup.rotation.y = 0;
     } else if (preset === 'atmosphere') {
-      _camGoalPos.set(4.8, 1.9, 5.5);
+      _camGoalPos.copy(fitCameraToWidth(ATMOSPHERE_CAMERA_POSITION.clone(), width / height));
     } else if (preset === 'systems') {
-      _camGoalPos.set(5.1, 2.1, 5.9);
+      _camGoalPos.copy(fitCameraToWidth(SYSTEMS_CAMERA_POSITION.clone(), width / height));
     } else if ((preset === 'landmark' || preset === 'location') && latLon) {
       const dist = Math.max(2.48, distanceOverride ?? (preset === 'location' ? 2.68 : 4.2));
       const v = latLonToVector3(latLon.lat, latLon.lon, dist);
@@ -1163,7 +1207,7 @@ export class EarthScene {
       localVec.applyAxisAngle(new THREE.Vector3(0, 0, 1), this.earthTiltGroup.rotation.z);
       _camGoalPos.copy(localVec);
     } else {
-      _camGoalPos.set(4.1, 1.75, 5.6);
+      _camGoalPos.copy(getHomeCameraPosition(width / height));
     }
 
     this.beginCameraFlight(isCloseTarget ? 1050 : 800);
@@ -1178,6 +1222,11 @@ export class EarthScene {
       const h = this.container.clientHeight || window.innerHeight;
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
+      // Before the user takes control, keep the opening framing fitted to the
+      // current screen (e.g. rotating a phone to portrait zooms back out).
+      if (!this.userHasInteracted && !this.cameraAnimating) {
+        this.camera.position.copy(getHomeCameraPosition(w / h));
+      }
       this.renderer.setSize(w, h);
       this.renderer.render(this.scene, this.camera);
     };

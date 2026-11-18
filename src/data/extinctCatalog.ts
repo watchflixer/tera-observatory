@@ -53,6 +53,10 @@ export interface ExtinctSpecimen {
   extinctionCause: string;
   habitat: string;
   summary: string;
+  /** Optional photorealistic field-reconstruction plate stored under /public/extinct. */
+  imageUrl?: string;
+  /** Optional source video shown in the specimen's main Extinct showcase. */
+  videoUrl?: string;
   archetype: SpecimenArchetype;
   soundProfile: SoundProfile;
   primaryColor: string;
@@ -98,6 +102,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   // ======================== ANIMALS & DINOSAURS ========================
   {
     id: 'tyrannosaurus-rex',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/tyrannosaurus-rex.jpg`,
     lifeCatalogId: 'tyrannosaurus-rex',
     name: 'Tyrannosaurus rex',
     scientificName: 'Tyrannosaurus rex',
@@ -117,6 +122,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   },
   {
     id: 'triceratops',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/triceratops.jpg`,
     lifeCatalogId: 'triceratops',
     name: 'Triceratops',
     scientificName: 'Triceratops horridus',
@@ -136,6 +142,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   },
   {
     id: 'velociraptor',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/velociraptor.jpg`,
     lifeCatalogId: 'velociraptor',
     name: 'Velociraptor',
     scientificName: 'Velociraptor mongoliensis',
@@ -155,6 +162,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   },
   {
     id: 'brachiosaurus',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/brachiosaurus.jpg`,
     lifeCatalogId: 'brachiosaurus',
     name: 'Brachiosaurus',
     scientificName: 'Brachiosaurus altithorax',
@@ -174,6 +182,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   },
   {
     id: 'pteranodon',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/pteranodon.jpg`,
     lifeCatalogId: 'pteranodon',
     name: 'Pteranodon',
     scientificName: 'Pteranodon longiceps',
@@ -193,6 +202,8 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   },
   {
     id: 'dodo',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/dodo.jpg`,
+    videoUrl: `${import.meta.env.BASE_URL}extinct/dodo.mp4?v=1794977364648`,
     lifeCatalogId: 'dodo',
     name: 'Dodo',
     scientificName: 'Raphus cucullatus',
@@ -214,6 +225,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   // ======================== MAMMALS ========================
   {
     id: 'woolly-mammoth',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/woolly-mammoth.jpg`,
     lifeCatalogId: 'woolly-mammoth',
     name: 'Woolly Mammoth',
     scientificName: 'Mammuthus primigenius',
@@ -233,6 +245,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   },
   {
     id: 'smilodon',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/smilodon.jpg`,
     lifeCatalogId: 'smilodon',
     name: 'Saber-Toothed Cat (Smilodon)',
     scientificName: 'Smilodon fatalis',
@@ -252,6 +265,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   },
   {
     id: 'thylacine',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/thylacine.jpg`,
     lifeCatalogId: 'thylacine',
     name: 'Tasmanian Tiger (Thylacine)',
     scientificName: 'Thylacinus cynocephalus',
@@ -273,6 +287,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   // ======================== FLOWERS ========================
   {
     id: 'archaefructus',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/archaefructus.jpg`,
     lifeCatalogId: 'archaefructus',
     name: 'Archaefructus (Earliest Flower)',
     scientificName: 'Archaefructus liaoningensis',
@@ -292,6 +307,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   },
   {
     id: 'cycadeoidea',
+    imageUrl: `${import.meta.env.BASE_URL}extinct/cycadeoidea.jpg`,
     name: 'Cycadeoidea (Mesozoic Blossom)',
     scientificName: 'Cycadeoidea dacotensis',
     category: 'flowers',

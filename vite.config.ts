@@ -6,6 +6,9 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    // Relative base so the production build works both locally and on
+    // GitHub Pages (served from the /tera-observatory/ subpath).
+    base: './',
     plugins: [
       react(),
       tailwindcss(),
@@ -34,6 +37,8 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // Permit the Arena preview hostname (for example, 3000-<sandbox>.e2b.app).
+      allowedHosts: ['.e2b.app'],
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

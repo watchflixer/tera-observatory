@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import type { HistoryEraId } from '../data/earthData';
 
-export const NASA_DAY_MAP_URL = '/src/assets/images/earth_blue_marble_1794861693563.jpg';
-export const NASA_NIGHT_MAP_URL = '/src/assets/images/earth_night_lights_1794861694028.jpg';
-export const NASA_CLOUDS_ALPHA_URL = '/src/assets/images/earth_clouds_clean_1794861708192.jpg';
+export const NASA_DAY_MAP_URL = `${import.meta.env.BASE_URL}src/assets/images/earth_blue_marble_1794861693563.jpg`;
+export const NASA_NIGHT_MAP_URL = `${import.meta.env.BASE_URL}src/assets/images/earth_night_lights_1794861694028.jpg`;
+export const NASA_CLOUDS_ALPHA_URL = `${import.meta.env.BASE_URL}src/assets/images/earth_clouds_clean_1794861708192.jpg`;
 
 // Simplified recognizable world landmass polygons [lon, lat] for crisp fallback projection
 const LANDMASS_POLYGONS: Array<Array<[number, number]>> = [

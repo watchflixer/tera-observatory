@@ -5,6 +5,10 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import carboniferousSwampUrl from '../assets/images/extinct-habitats/carboniferous-swamp.jpg';
+import forestCanopySkyUrl from '../assets/images/extinct-habitats/forest-canopy-sky.jpg';
+import iceAgeSteppeUrl from '../assets/images/extinct-habitats/ice-age-steppe.jpg';
+import underwaterReefUrl from '../assets/images/extinct-habitats/underwater-reef.jpg';
 import type { ExtinctSpecimen } from '../data/extinctCatalog';
 import {
   computeClipKinematics,
@@ -14,6 +18,97 @@ import {
 } from '../utils/extinctShowcaseLogic';
 import { createCgiTexturePack, type CgiTexturePack } from './cgiTextures';
 import { buildSculptedTheropodRig } from './theropodBuilder';
+
+type HabitatSceneId = 'forest' | 'canopy' | 'underwater' | 'steppe' | 'swamp';
+
+interface HabitatSceneConfig {
+  backdropUrl?: string;
+  backgroundColor: number;
+  fogColor: number;
+  fogDensity: number;
+  environmentIntensity: number;
+  hemisphereSky: number;
+  hemisphereGround: number;
+  keyLightColor: number;
+  keyLightIntensity: number;
+  rimLightColor: number;
+  rimLightIntensity: number;
+}
+
+const HABITAT_SCENES: Record<HabitatSceneId, HabitatSceneConfig> = {
+  forest: {
+    backgroundColor: 0x252917,
+    fogColor: 0x252917,
+    fogDensity: 0.015,
+    environmentIntensity: 0.52,
+    hemisphereSky: 0x8ea07a,
+    hemisphereGround: 0x161c0f,
+    keyLightColor: 0xffd28e,
+    keyLightIntensity: 3.15,
+    rimLightColor: 0xffb140,
+    rimLightIntensity: 1.85,
+  },
+  canopy: {
+    backdropUrl: forestCanopySkyUrl,
+    backgroundColor: 0x91a8a5,
+    fogColor: 0x9baea7,
+    fogDensity: 0.0035,
+    environmentIntensity: 0.68,
+    hemisphereSky: 0xc8d9d6,
+    hemisphereGround: 0x34433c,
+    keyLightColor: 0xffdda1,
+    keyLightIntensity: 2.6,
+    rimLightColor: 0x9bd3c5,
+    rimLightIntensity: 1.4,
+  },
+  underwater: {
+    backdropUrl: underwaterReefUrl,
+    backgroundColor: 0x073248,
+    fogColor: 0x0a5367,
+    fogDensity: 0.012,
+    environmentIntensity: 0.25,
+    hemisphereSky: 0x6cc3cf,
+    hemisphereGround: 0x052b3a,
+    keyLightColor: 0x7ed8ed,
+    keyLightIntensity: 2.2,
+    rimLightColor: 0x29a5c4,
+    rimLightIntensity: 1.2,
+  },
+  steppe: {
+    backdropUrl: iceAgeSteppeUrl,
+    backgroundColor: 0x879391,
+    fogColor: 0xb2b9b4,
+    fogDensity: 0.005,
+    environmentIntensity: 0.42,
+    hemisphereSky: 0xc2d2d3,
+    hemisphereGround: 0x51483a,
+    keyLightColor: 0xffe2ba,
+    keyLightIntensity: 2.25,
+    rimLightColor: 0xe2f0ec,
+    rimLightIntensity: 1.25,
+  },
+  swamp: {
+    backdropUrl: carboniferousSwampUrl,
+    backgroundColor: 0x1f3125,
+    fogColor: 0x50644c,
+    fogDensity: 0.008,
+    environmentIntensity: 0.4,
+    hemisphereSky: 0x9fb58c,
+    hemisphereGround: 0x1b261b,
+    keyLightColor: 0xffd094,
+    keyLightIntensity: 2.25,
+    rimLightColor: 0xa9c879,
+    rimLightIntensity: 1.1,
+  },
+};
+
+function getHabitatSceneId(specimen: ExtinctSpecimen): HabitatSceneId {
+  if (specimen.category === 'marine') return 'underwater';
+  if (specimen.archetype === 'pterosaur') return 'canopy';
+  if (specimen.id === 'woolly-mammoth') return 'steppe';
+  if (['archaefructus', 'lepidodendron', 'cooksonia'].includes(specimen.id)) return 'swamp';
+  return 'forest';
+}
 
 export interface ExtinctSceneCallbacks {
   onPhaseChange?: (phase: ExtinctClipPhase) => void;
@@ -181,6 +276,45 @@ function createForestGroundTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+function createMammalFurTexture(baseColor: string, seed: number): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    let state = (seed * 2654435761) >>> 0;
+    const random = () => {
+      state = (state * 1664525 + 1013904223) >>> 0;
+      return state / 0xffffffff;
+    };
+
+    // Fine directional hair strokes break up the smooth primitive surface under grazing light.
+    for (let i = 0; i < 24000; i++) {
+      const x = random() * canvas.width;
+      const y = random() * canvas.height;
+      const light = random() > 0.54;
+      const alpha = 0.06 + random() * 0.16;
+      ctx.strokeStyle = light
+        ? `rgba(232, 210, 176, ${alpha})`
+        : `rgba(28, 21, 16, ${alpha})`;
+      ctx.lineWidth = 0.45 + random() * 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + (random() - 0.5) * 2.2, y + 2.5 + random() * 7.5);
+      ctx.stroke();
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 8;
+  return texture;
+}
+
 function createSoftShadowTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 128;
@@ -209,6 +343,12 @@ export class ExtinctPrehistoricScene {
   private camera: THREE.PerspectiveCamera;
   private pmremGenerator: THREE.PMREMGenerator;
   private envRenderTarget: THREE.WebGLRenderTarget;
+  private habitatBackdropMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  private habitatTextures = new Map<HabitatSceneId, THREE.Texture>();
+  private currentHabitat: HabitatSceneId = 'forest';
+  private hemisphereLight: THREE.HemisphereLight | null = null;
+  private keyLight: THREE.DirectionalLight | null = null;
+  private rimLight: THREE.DirectionalLight | null = null;
 
   private activeSpecimen: ExtinctSpecimen;
   private rig: SpecimenRig | null = null;
@@ -227,6 +367,7 @@ export class ExtinctPrehistoricScene {
   private vaporSpawnTimer = 0;
   private mistMeshes: THREE.Mesh[] = [];
   private forestGroup: THREE.Group;
+  private effectsGroup: THREE.Group;
 
   private frameId = 0;
   private disposed = false;
@@ -289,7 +430,25 @@ export class ExtinctPrehistoricScene {
 
     this.forestGroup = new THREE.Group();
     this.scene.add(this.forestGroup);
+    this.effectsGroup = new THREE.Group();
+    this.scene.add(this.effectsGroup);
     this.buildPrehistoricForest();
+
+    const backdropGeometry = new THREE.PlaneGeometry(120, 68);
+    const backdropMaterial = new THREE.MeshBasicMaterial({
+      color: 0x073248,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      fog: false,
+      toneMapped: false,
+    });
+    this.habitatBackdropMesh = new THREE.Mesh(backdropGeometry, backdropMaterial);
+    this.habitatBackdropMesh.position.set(0, 2, -56);
+    this.habitatBackdropMesh.frustumCulled = false;
+    this.habitatBackdropMesh.renderOrder = -10;
+    this.habitatBackdropMesh.visible = false;
+    this.scene.add(this.habitatBackdropMesh);
+    this.disposableResources.push(backdropGeometry, backdropMaterial);
 
     this.loadSpecimen(initialSpecimen);
 
@@ -318,31 +477,31 @@ export class ExtinctPrehistoricScene {
 
   private setupLighting(): void {
     // Deep damp jungle canopy ambient vs dark forest floor bounce for theatrical contrast
-    const hemi = new THREE.HemisphereLight(0x8ea07a, 0x161c0f, 0.78);
-    this.scene.add(hemi);
+    this.hemisphereLight = new THREE.HemisphereLight(0x8ea07a, 0x161c0f, 0.78);
+    this.scene.add(this.hemisphereLight);
 
-    // Rich golden-hour sunlight piercing the Mesozoic redwood canopy
-    const sun = new THREE.DirectionalLight(0xffd28e, 3.15);
-    sun.position.set(11, 20, 11);
+    // Warm, cinematic key light; its hue shifts with each habitat.
+    this.keyLight = new THREE.DirectionalLight(0xffd28e, 3.15);
+    this.keyLight.position.set(11, 20, 11);
     if (!this.isSoftwareGl) {
-      sun.castShadow = true;
-      sun.shadow.mapSize.set(2048, 2048);
-      sun.shadow.camera.near = 2;
-      sun.shadow.camera.far = 65;
+      this.keyLight.castShadow = true;
+      this.keyLight.shadow.mapSize.set(2048, 2048);
+      this.keyLight.shadow.camera.near = 2;
+      this.keyLight.shadow.camera.far = 65;
       const d = 18;
-      sun.shadow.camera.left = -d;
-      sun.shadow.camera.right = d;
-      sun.shadow.camera.top = d;
-      sun.shadow.camera.bottom = -d;
-      sun.shadow.bias = -0.0004;
-      sun.shadow.normalBias = 0.02;
+      this.keyLight.shadow.camera.left = -d;
+      this.keyLight.shadow.camera.right = d;
+      this.keyLight.shadow.camera.top = d;
+      this.keyLight.shadow.camera.bottom = -d;
+      this.keyLight.shadow.bias = -0.0004;
+      this.keyLight.shadow.normalBias = 0.02;
     }
-    this.scene.add(sun);
+    this.scene.add(this.keyLight);
 
-    // Intense amber-gold atmospheric rim light sculpting wet scales, saliva & fangs
-    const rim = new THREE.DirectionalLight(0xffb140, 1.85);
-    rim.position.set(-10, 9, -22);
-    this.scene.add(rim);
+    // Atmospheric rim light separates the specimen from the habitat plate.
+    this.rimLight = new THREE.DirectionalLight(0xffb140, 1.85);
+    this.rimLight.position.set(-10, 9, -22);
+    this.scene.add(this.rimLight);
   }
 
   private buildPrehistoricForest(): void {
@@ -722,7 +881,7 @@ export class ExtinctPrehistoricScene {
     }
     this.debrisMesh.instanceMatrix.needsUpdate = true;
     if (this.debrisMesh.instanceColor) this.debrisMesh.instanceColor.needsUpdate = true;
-    this.forestGroup.add(this.debrisMesh);
+    this.effectsGroup.add(this.debrisMesh);
 
     // 8B. WARM BREATH VAPOR MIST JETTING FROM ROARING JAWS IN COOL MORNING FOREST
     const vaporCount = 48;
@@ -762,7 +921,7 @@ export class ExtinctPrehistoricScene {
       this.vaporMesh.setMatrixAt(i, _vaporDummy.matrix);
     }
     this.vaporMesh.instanceMatrix.needsUpdate = true;
-    this.forestGroup.add(this.vaporMesh);
+    this.effectsGroup.add(this.vaporMesh);
 
     // 9. SUNLIT GOLDEN FOREST SPORES & MIST MOTES
     const moteCount = 240;
@@ -784,7 +943,7 @@ export class ExtinctPrehistoricScene {
     });
     this.disposableResources.push(moteGeo, moteMat);
     this.dustPoints = new THREE.Points(moteGeo, moteMat);
-    this.forestGroup.add(this.dustPoints);
+    this.effectsGroup.add(this.dustPoints);
   }
 
   private emitBreathVapor(x: number, y: number, z: number, count: number): void {
@@ -893,8 +1052,71 @@ export class ExtinctPrehistoricScene {
     }
   }
 
+  private configureHabitat(specimen: ExtinctSpecimen): void {
+    const habitat = getHabitatSceneId(specimen);
+    const config = HABITAT_SCENES[habitat];
+    this.currentHabitat = habitat;
+    this.forestGroup.visible = habitat === 'forest';
+    this.effectsGroup.visible = true;
+    this.habitatBackdropMesh.visible = habitat !== 'forest';
+    if (this.debrisMesh) this.debrisMesh.visible = habitat === 'forest';
+    if (this.vaporMesh) this.vaporMesh.visible = habitat === 'forest' || habitat === 'steppe';
+    if (this.dustPoints) {
+      this.dustPoints.visible = true;
+      const particles = this.dustPoints.material as THREE.PointsMaterial;
+      particles.color.setHex(config.rimLightColor);
+      particles.opacity = habitat === 'underwater' ? 0.34 : 0.5;
+    }
+    this.scene.background = new THREE.Color(config.backgroundColor);
+    this.scene.environmentIntensity = config.environmentIntensity;
+
+    if (this.scene.fog instanceof THREE.FogExp2) {
+      this.scene.fog.color.setHex(config.fogColor);
+      this.scene.fog.density = config.fogDensity;
+    }
+    this.hemisphereLight?.color.setHex(config.hemisphereSky);
+    this.hemisphereLight?.groundColor.setHex(config.hemisphereGround);
+    if (this.keyLight) {
+      this.keyLight.color.setHex(config.keyLightColor);
+      this.keyLight.intensity = config.keyLightIntensity;
+    }
+    if (this.rimLight) {
+      this.rimLight.color.setHex(config.rimLightColor);
+      this.rimLight.intensity = config.rimLightIntensity;
+    }
+
+    if (!config.backdropUrl) return;
+
+    let texture = this.habitatTextures.get(habitat);
+    if (!texture) {
+      texture = new THREE.TextureLoader().load(config.backdropUrl, (loaded) => {
+        if (this.disposed) {
+          loaded.dispose();
+          return;
+        }
+        loaded.colorSpace = THREE.SRGBColorSpace;
+        loaded.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+        loaded.minFilter = THREE.LinearMipmapLinearFilter;
+        loaded.magFilter = THREE.LinearFilter;
+        loaded.needsUpdate = true;
+        if (this.currentHabitat === habitat) {
+          this.habitatBackdropMesh.material.map = loaded;
+          this.habitatBackdropMesh.material.color.set(0xffffff);
+          this.habitatBackdropMesh.material.needsUpdate = true;
+        }
+      });
+      texture.colorSpace = THREE.SRGBColorSpace;
+      this.habitatTextures.set(habitat, texture);
+    }
+
+    this.habitatBackdropMesh.material.map = texture;
+    this.habitatBackdropMesh.material.color.set(0xffffff);
+    this.habitatBackdropMesh.material.needsUpdate = true;
+  }
+
   public loadSpecimen(specimen: ExtinctSpecimen): void {
     this.activeSpecimen = specimen;
+    this.configureHabitat(specimen);
     this.clearCurrentRig();
     this.rig = this.buildRigForSpecimen(specimen);
     this.scene.add(this.rig.root);
@@ -1244,9 +1466,16 @@ export class ExtinctPrehistoricScene {
 
   private buildQuadrupedPredatorRig(specimen: ExtinctSpecimen): SpecimenRig {
     const root = new THREE.Group();
-    const coatMat = new THREE.MeshStandardMaterial({ color: specimen.primaryColor, roughness: 0.76 });
+    const furTexture = createMammalFurTexture(
+      specimen.primaryColor,
+      specimen.archetype === 'thylacine' ? 1936 : 1800
+    );
+    const coatMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: furTexture, roughness: 0.82 });
     const stripeMat = new THREE.MeshStandardMaterial({ color: specimen.secondaryColor, roughness: 0.8 });
     const fangMat = new THREE.MeshStandardMaterial({ color: 0xf8f3e6, roughness: 0.2 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x17110d, roughness: 0.18 });
+    const noseMat = new THREE.MeshStandardMaterial({ color: 0x201b19, roughness: 0.28 });
+    const mouthMat = new THREE.MeshStandardMaterial({ color: 0x2b1a14, roughness: 0.82 });
     const shadowDisc = this.createContactShadowDisc(1.25);
     root.add(shadowDisc);
 
@@ -1257,6 +1486,30 @@ export class ExtinctPrehistoricScene {
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 1.2, 8, 12), coatMat);
     torso.rotation.x = Math.PI / 2;
     bodyPivot.add(torso);
+
+    if (specimen.archetype === 'thylacine') {
+      // Short dark bands arc over the rump, echoing the thylacine's distinctive back stripes.
+      for (let index = 0; index < 8; index++) {
+        const z = 0.08 - index * 0.105;
+        const capOffset = Math.max(0, Math.abs(z) - 0.6);
+        const radius = Math.sqrt(Math.max(0.025, 0.42 * 0.42 - capOffset * capOffset));
+        const points: THREE.Vector3[] = [];
+        for (let step = 0; step <= 8; step++) {
+          const angle = (step / 8) * Math.PI;
+          points.push(
+            new THREE.Vector3(
+              Math.cos(angle) * (radius + 0.012),
+              Math.sin(angle) * (radius + 0.012),
+              z
+            )
+          );
+        }
+        const stripeCurve = new THREE.CatmullRomCurve3(points);
+        const stripe = new THREE.Mesh(new THREE.TubeGeometry(stripeCurve, 20, 0.022, 5, false), stripeMat);
+        stripe.castShadow = true;
+        bodyPivot.add(stripe);
+      }
+    }
 
     const tail = new THREE.Group();
     tail.position.set(0, 0.08, -0.78);
@@ -1276,6 +1529,45 @@ export class ExtinctPrehistoricScene {
     const skull = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.42, 0.64), coatMat);
     skull.position.set(0, 0.08, 0.24);
     headPivot.add(skull);
+
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), coatMat);
+    muzzle.scale.set(0.78, 0.62, 1.12);
+    muzzle.position.set(0, -0.04, 0.52);
+    headPivot.add(muzzle);
+
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), noseMat);
+    nose.scale.set(1.15, 0.72, 0.82);
+    nose.position.set(0, -0.015, 0.72);
+    headPivot.add(nose);
+
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.055, 0.32), mouthMat);
+    mouth.position.set(0, -0.15, 0.42);
+    headPivot.add(mouth);
+
+    for (const side of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), eyeMat);
+      eye.position.set(side * 0.205, 0.15, 0.42);
+      headPivot.add(eye);
+
+      const eyeGlint = new THREE.Mesh(
+        new THREE.SphereGeometry(0.014, 6, 5),
+        new THREE.MeshBasicMaterial({ color: 0xffe3b3 })
+      );
+      eyeGlint.position.set(side * 0.218, 0.167, 0.46);
+      headPivot.add(eyeGlint);
+
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.105, 0.28, 7), coatMat);
+      ear.scale.z = 0.58;
+      ear.rotation.z = -side * 0.16;
+      ear.position.set(side * 0.17, 0.34, 0.03);
+      headPivot.add(ear);
+
+      const innerEar = new THREE.Mesh(new THREE.ConeGeometry(0.046, 0.17, 6), stripeMat);
+      innerEar.scale.z = 0.56;
+      innerEar.rotation.z = -side * 0.16;
+      innerEar.position.set(side * 0.17, 0.34, 0.079);
+      headPivot.add(innerEar);
+    }
 
     if (specimen.archetype === 'sabertooth') {
       for (const side of [-1, 1]) {
@@ -1299,6 +1591,19 @@ export class ExtinctPrehistoricScene {
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.1, 1.05, 8), coatMat);
       leg.position.y = -0.52;
       p.add(leg);
+
+      const paw = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), coatMat);
+      paw.scale.set(0.92, 0.46, 1.25);
+      paw.position.set(0, -1.0, 0.12);
+      p.add(paw);
+
+      for (let toe = -1; toe <= 1; toe++) {
+        const claw = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.095, 5), fangMat);
+        claw.rotation.x = Math.PI / 2;
+        claw.position.set(toe * 0.065, -1.015, 0.265);
+        p.add(claw);
+      }
+
       root.add(p);
       return p;
     };
@@ -1316,6 +1621,7 @@ export class ExtinctPrehistoricScene {
       shadowDisc,
       baseY: 1.12,
       heavySteps: false,
+      extraDisposables: [furTexture],
     };
   }
 
@@ -1329,6 +1635,7 @@ export class ExtinctPrehistoricScene {
     });
     const crestMat = new THREE.MeshStandardMaterial({ color: specimen.accentColor, roughness: 0.45 });
     const shadowDisc = this.createContactShadowDisc(1.2);
+    shadowDisc.visible = false;
     root.add(shadowDisc);
 
     const bodyPivot = new THREE.Group();
@@ -1354,6 +1661,11 @@ export class ExtinctPrehistoricScene {
     headPivot.add(crest);
 
     const jawPivot = new THREE.Group();
+    jawPivot.position.set(0, -0.08, 0.38);
+    const lowerBeak = new THREE.Mesh(new THREE.ConeGeometry(0.105, 0.58, 6), crestMat);
+    lowerBeak.rotation.x = Math.PI / 2;
+    lowerBeak.position.set(0, -0.015, 0.24);
+    jawPivot.add(lowerBeak);
     headPivot.add(jawPivot);
 
     const makeWing = (side: number) => {
@@ -1410,6 +1722,11 @@ export class ExtinctPrehistoricScene {
     headPivot.add(beak);
 
     const jawPivot = new THREE.Group();
+    jawPivot.position.set(0, 0.13, 0.3);
+    const lowerBeak = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.34, 8), beakMat);
+    lowerBeak.rotation.x = Math.PI / 2;
+    lowerBeak.position.set(0, -0.12, 0.11);
+    jawPivot.add(lowerBeak);
     headPivot.add(jawPivot);
 
     const makeLeg = (x: number) => {
@@ -1440,6 +1757,8 @@ export class ExtinctPrehistoricScene {
     const skinMat = new THREE.MeshStandardMaterial({ color: specimen.primaryColor, roughness: 0.75 });
     const furMat = new THREE.MeshStandardMaterial({ color: specimen.secondaryColor, roughness: 0.9 });
     const spearMat = new THREE.MeshStandardMaterial({ color: 0x6b4c30, roughness: 0.85 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1b120d, roughness: 0.24 });
+    const mouthMat = new THREE.MeshStandardMaterial({ color: 0x301d18, roughness: 0.8 });
     const shadowDisc = this.createContactShadowDisc(0.9);
     root.add(shadowDisc);
 
@@ -1454,16 +1773,56 @@ export class ExtinctPrehistoricScene {
     headPivot.position.set(0, 0.62, 0.04);
     bodyPivot.add(headPivot);
 
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), skinMat);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 20, 16), skinMat);
     head.position.y = 0.22;
     headPivot.add(head);
+
+    for (const side of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.033, 10, 8), eyeMat);
+      eye.position.set(side * 0.075, 0.285, 0.194);
+      headPivot.add(eye);
+    }
+    const brow = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.06, 3, 8), skinMat);
+    brow.position.set(0, 0.355, 0.18);
+    brow.rotation.z = Math.PI / 2;
+    headPivot.add(brow);
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 10), skinMat);
+    nose.scale.set(0.78, 1.3, 1.05);
+    nose.position.set(0, 0.185, 0.226);
+    headPivot.add(nose);
+    const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 8), mouthMat);
+    mouth.scale.set(0.78, 0.12, 0.18);
+    mouth.position.set(0, 0.105, 0.215);
+    headPivot.add(mouth);
 
     const spear = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.2, 8), spearMat);
     spear.position.set(0.45, 0.25, 0.2);
     spear.rotation.x = 0.25;
     bodyPivot.add(spear);
 
+    const armPivots: THREE.Group[] = [];
+    for (const side of [-1, 1]) {
+      const armPivot = new THREE.Group();
+      armPivot.position.set(side * 0.28, 0.38, 0.015);
+      const upperArm = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.35, 6, 8), furMat);
+      upperArm.position.set(side * 0.015, -0.24, 0);
+      armPivot.add(upperArm);
+      const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.29, 6, 8), skinMat);
+      forearm.position.set(side * 0.025, -0.53, 0.025);
+      armPivot.add(forearm);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), skinMat);
+      hand.position.set(side * 0.03, -0.72, 0.05);
+      armPivot.add(hand);
+      bodyPivot.add(armPivot);
+      armPivots.push(armPivot);
+    }
+
     const jawPivot = new THREE.Group();
+    jawPivot.position.set(0, 0.11, 0.15);
+    const lowerJaw = new THREE.Mesh(new THREE.SphereGeometry(0.135, 14, 10), skinMat);
+    lowerJaw.scale.set(1.0, 0.64, 0.68);
+    lowerJaw.position.set(0, -0.1, 0.035);
+    jawPivot.add(lowerJaw);
     headPivot.add(jawPivot);
 
     const makeLeg = (x: number) => {
@@ -1481,6 +1840,7 @@ export class ExtinctPrehistoricScene {
       bodyPivot,
       headPivot,
       jawPivot,
+      armPivots,
       leftLegPivot: makeLeg(-0.18),
       rightLegPivot: makeLeg(0.18),
       tailSegments: [],
@@ -1491,41 +1851,179 @@ export class ExtinctPrehistoricScene {
 
   private buildMarineRig(specimen: ExtinctSpecimen): SpecimenRig {
     const root = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({ color: specimen.primaryColor, roughness: 0.42, metalness: 0.12 });
-    const finMat = new THREE.MeshStandardMaterial({ color: specimen.secondaryColor, roughness: 0.55 });
+    const isTrilobite = specimen.archetype === 'trilobite';
+    const isDunkleosteus = specimen.id === 'dunkleosteus';
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: specimen.primaryColor,
+      map: this.textures.dinoAlbedoMap,
+      normalMap: this.textures.dinoNormalMap,
+      roughnessMap: this.textures.dinoRoughnessMap,
+      roughness: isDunkleosteus ? 0.76 : 0.48,
+      metalness: 0.04,
+    });
+    const finMat = new THREE.MeshStandardMaterial({ color: specimen.secondaryColor, roughness: 0.62 });
+    const armorMat = new THREE.MeshStandardMaterial({ color: specimen.secondaryColor, roughness: 0.72 });
+    const toothMat = new THREE.MeshStandardMaterial({ color: 0xe6ddc7, roughness: 0.3 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x120f0b, roughness: 0.18 });
     const shadowDisc = this.createContactShadowDisc(1.5);
+    shadowDisc.visible = false;
     root.add(shadowDisc);
 
     const bodyPivot = new THREE.Group();
     bodyPivot.position.set(0, 1.6, 0);
     root.add(bodyPivot);
 
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.62, 1.9, 8, 14), mat);
-    body.rotation.x = Math.PI / 2;
-    if (specimen.archetype === 'trilobite') {
-      body.scale.set(1.25, 1.0, 0.45);
-    }
-    bodyPivot.add(body);
-
-    if (specimen.archetype === 'marine-predator') {
-      const dorsalFin = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.95, 4), finMat);
-      dorsalFin.position.set(0, 0.82, -0.1);
-      dorsalFin.rotation.x = -0.25;
-      bodyPivot.add(dorsalFin);
-    }
-
-    const tail = new THREE.Group();
-    tail.position.set(0, 0, -1.25);
-    const tailFin = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.15, 4), finMat);
-    tailFin.rotation.x = Math.PI / 2;
-    tailFin.position.z = -0.5;
-    tail.add(tailFin);
-    bodyPivot.add(tail);
-
     const headPivot = new THREE.Group();
     const jawPivot = new THREE.Group();
-    bodyPivot.add(headPivot);
-    headPivot.add(jawPivot);
+    const tail = new THREE.Group();
+    const animatedFins: THREE.Group[] = [];
+
+    if (isTrilobite) {
+      const shell = new THREE.Mesh(new THREE.SphereGeometry(0.8, 28, 18), bodyMat);
+      shell.scale.set(0.82, 0.23, 1.25);
+      bodyPivot.add(shell);
+
+      // Overlapping mineralized thoracic segments taper into a broad tail shield.
+      for (let i = 0; i < 7; i++) {
+        const segment = new THREE.Mesh(
+          new THREE.SphereGeometry(0.34 - i * 0.015, 18, 12),
+          i % 2 === 0 ? armorMat : bodyMat
+        );
+        segment.scale.set(0.96, 0.32, 0.58);
+        segment.position.set(0, 0.035, 0.47 - i * 0.205);
+        bodyPivot.add(segment);
+      }
+
+      const cephalon = new THREE.Mesh(new THREE.SphereGeometry(0.5, 22, 16), armorMat);
+      cephalon.scale.set(1.15, 0.34, 0.78);
+      cephalon.position.set(0, 0.08, 0.88);
+      bodyPivot.add(cephalon);
+
+      tail.position.set(0, 0, -0.98);
+      const pygidium = new THREE.Mesh(new THREE.SphereGeometry(0.4, 18, 12), armorMat);
+      pygidium.scale.set(1.0, 0.32, 0.72);
+      pygidium.position.z = -0.15;
+      tail.add(pygidium);
+      bodyPivot.add(tail);
+
+      for (const side of [-1, 1]) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), eyeMat);
+        eye.position.set(side * 0.43, 0.21, 0.92);
+        bodyPivot.add(eye);
+
+        for (let i = 0; i < 6; i++) {
+          const legPivot = new THREE.Group();
+          legPivot.position.set(side * 0.28, -0.13, 0.5 - i * 0.19);
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 0.35, 6), finMat);
+          leg.rotation.z = side * (Math.PI / 2);
+          leg.position.set(side * 0.12, -0.07, 0);
+          legPivot.add(leg);
+          bodyPivot.add(legPivot);
+          animatedFins.push(legPivot);
+        }
+      }
+
+      headPivot.position.set(0, 0, 0.8);
+      bodyPivot.add(headPivot);
+      headPivot.add(jawPivot);
+    } else {
+      const torso = new THREE.Mesh(new THREE.SphereGeometry(1, 36, 24), bodyMat);
+      torso.scale.set(isDunkleosteus ? 0.77 : 0.72, isDunkleosteus ? 0.58 : 0.48, 2.2);
+      torso.position.z = -0.24;
+      bodyPivot.add(torso);
+
+      // Head shield / broad snout, with a hinged lower jaw for the close-up roar beat.
+      headPivot.position.set(0, 0.02, 1.27);
+      bodyPivot.add(headPivot);
+      if (isDunkleosteus) {
+        const shield = new THREE.Mesh(new THREE.DodecahedronGeometry(0.62, 1), armorMat);
+        shield.scale.set(1.18, 0.78, 0.86);
+        shield.position.set(0, 0.13, 0.2);
+        headPivot.add(shield);
+        const upperPlate = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.25, 0.8), armorMat);
+        upperPlate.position.set(0, -0.12, 0.57);
+        headPivot.add(upperPlate);
+      } else {
+        const skull = new THREE.Mesh(new THREE.SphereGeometry(0.52, 24, 18), bodyMat);
+        skull.scale.set(1.14, 0.78, 1.12);
+        skull.position.set(0, 0.05, 0.12);
+        headPivot.add(skull);
+        const snout = new THREE.Mesh(new THREE.SphereGeometry(0.42, 22, 16), bodyMat);
+        snout.scale.set(0.88, 0.58, 1.22);
+        snout.position.set(0, -0.07, 0.54);
+        headPivot.add(snout);
+      }
+
+      jawPivot.position.set(0, -0.29, 0.55);
+      const lowerJaw = new THREE.Mesh(new THREE.SphereGeometry(0.42, 22, 16), isDunkleosteus ? armorMat : bodyMat);
+      lowerJaw.scale.set(isDunkleosteus ? 1.08 : 0.96, 0.38, 1.08);
+      lowerJaw.position.set(0, -0.055, 0.26);
+      jawPivot.add(lowerJaw);
+
+      if (isDunkleosteus) {
+        const blade = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.38, 4), armorMat);
+        blade.rotation.z = Math.PI;
+        blade.position.set(0, -0.04, 0.72);
+        jawPivot.add(blade);
+      } else {
+        const toothGeometry = new THREE.ConeGeometry(0.052, 0.17, 5);
+        for (let i = -3; i <= 3; i++) {
+          const upperTooth = new THREE.Mesh(toothGeometry, toothMat);
+          upperTooth.rotation.z = Math.PI;
+          upperTooth.position.set(i * 0.105, -0.22, 0.73 + Math.abs(i) * 0.018);
+          headPivot.add(upperTooth);
+          const lowerTooth = new THREE.Mesh(toothGeometry, toothMat);
+          lowerTooth.position.set(i * 0.105, 0.065, 0.28 + Math.abs(i) * 0.018);
+          jawPivot.add(lowerTooth);
+        }
+
+        // Five subtle gill slits and paired eyes make the silhouette read as a shark.
+        for (const side of [-1, 1]) {
+          for (let i = 0; i < 5; i++) {
+            const gill = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.24, 6), armorMat);
+            gill.position.set(side * 0.56, 0.02, -0.12 - i * 0.12);
+            gill.rotation.z = side * 0.18;
+            bodyPivot.add(gill);
+          }
+        }
+      }
+
+      for (const side of [-1, 1]) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 14, 12), eyeMat);
+        eye.position.set(side * 0.53, 0.22, 0.39);
+        headPivot.add(eye);
+
+        const finPivot = new THREE.Group();
+        finPivot.position.set(side * 0.55, -0.12, 0.05);
+        const pectoralFin = new THREE.Mesh(new THREE.SphereGeometry(0.55, 18, 12), finMat);
+        pectoralFin.scale.set(0.72, 0.12, 1.0);
+        pectoralFin.position.set(side * 0.34, -0.015, -0.12);
+        pectoralFin.rotation.y = side * 0.18;
+        finPivot.add(pectoralFin);
+        bodyPivot.add(finPivot);
+        animatedFins.push(finPivot);
+      }
+
+      const dorsalFin = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.86, 5), finMat);
+      dorsalFin.position.set(0, 0.58, -0.3);
+      dorsalFin.rotation.x = 0.18;
+      bodyPivot.add(dorsalFin);
+      const pelvicFin = new THREE.Mesh(new THREE.ConeGeometry(0.19, 0.52, 5), finMat);
+      pelvicFin.position.set(0.38, 0.07, -1.03);
+      pelvicFin.rotation.z = 0.7;
+      bodyPivot.add(pelvicFin);
+      pelvicFin.position.x = -0.38;
+
+      tail.position.set(0, 0, -1.78);
+      for (const side of [-1, 1]) {
+        const lobe = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.9, 5), finMat);
+        lobe.rotation.x = -Math.PI / 2;
+        lobe.position.set(0, side * 0.23, -0.35);
+        lobe.scale.set(0.75, 0.82, 1.0);
+        tail.add(lobe);
+      }
+      bodyPivot.add(tail);
+    }
 
     return {
       root,
@@ -1533,6 +2031,7 @@ export class ExtinctPrehistoricScene {
       headPivot,
       jawPivot,
       tailSegments: [tail],
+      armPivots: animatedFins,
       shadowDisc,
       baseY: 1.6,
       isAquatic: true,
@@ -1795,6 +2294,10 @@ export class ExtinctPrehistoricScene {
       rig.tailSegments.forEach((seg, idx) => {
         seg.rotation.y = Math.sin(elapsed * 5.4 - idx) * 0.28;
       });
+      const finBeat = this.activeSpecimen.archetype === 'trilobite' ? 12 : 4.2;
+      rig.armPivots?.forEach((fin, idx) => {
+        fin.rotation.z = Math.sin(elapsed * finBeat + idx * Math.PI * 0.72) * 0.1;
+      });
     } else {
       // Continuous organic ribcage breathing heave + sprint bounce
       const breathScale = 1 + camFrame.breathCycle * 0.025;
@@ -2034,6 +2537,8 @@ export class ExtinctPrehistoricScene {
     }
     this.disposableResources = [];
 
+    this.habitatTextures.forEach((texture) => texture.dispose());
+    this.habitatTextures.clear();
     this.textures.dispose();
     this.composer?.dispose();
     this.envRenderTarget.dispose();
