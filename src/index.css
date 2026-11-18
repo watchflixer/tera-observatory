@@ -212,3 +212,42 @@ input[type="range"].terra-slider::-moz-range-thumb {
 .terra-leaflet-popup .leaflet-popup-close-button:hover {
   color: #ffffff !important;
 }
+
+/* Moving highlights make the shop tab sparkle without affecting its hit area. */
+.shop-button-glint {
+  position: absolute;
+  inset: -25% auto -25% -40%;
+  width: 32%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+  transform: skewX(-22deg);
+  animation: shop-glint 3s ease-in-out infinite;
+}
+
+.shop-button-sparkle {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  color: #fff9d8;
+  font-size: 10px;
+  line-height: 1;
+  text-shadow: 0 0 5px #fff, 0 0 9px #ffe29a;
+  pointer-events: none;
+  animation: shop-sparkle 1.8s ease-in-out infinite;
+}
+
+@keyframes shop-glint {
+  0%, 15% { left: -40%; opacity: 0; }
+  25% { opacity: 1; }
+  55%, 100% { left: 125%; opacity: 0; }
+}
+
+@keyframes shop-sparkle {
+  0%, 100% { opacity: 0.45; transform: scale(0.75); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shop-button-glint { display: none; }
+  .shop-button-sparkle { animation: none; }
+}

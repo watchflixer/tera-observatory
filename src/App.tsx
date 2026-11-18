@@ -4,6 +4,7 @@ import { DossierPanel } from './components/DossierPanel';
 import { EarthViewport } from './components/EarthViewport';
 import { ExtinctAtlasModal } from './components/ExtinctAtlasModal';
 import { LifeHistoryAtlas, type AtlasSectionTab } from './components/LifeHistoryAtlas';
+import { ShopButton } from './components/ShopButton';
 import { TopBar } from './components/TopBar';
 import {
   EARTH_LANDMARKS,
@@ -396,6 +397,8 @@ export default function App() {
         dossierOpen={dossierOpen}
         zenMode={zenMode}
       />
+
+      {!zenMode && <ShopButton />}
 
       <DossierPanel
         mode={mode}
