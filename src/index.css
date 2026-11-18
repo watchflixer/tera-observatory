@@ -48,6 +48,51 @@ body,
     top: 0;
     right: 0;
   }
+
+  /* Keep the language control alongside the brand and the search on its own row. */
+  .terapedia-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+  }
+
+  .terapedia-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .terapedia-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .terapedia-search {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .terapedia-language-name {
+    max-width: clamp(3rem, 19vw, 7rem);
+  }
+
+  .terapedia-close-label {
+    max-width: 4rem;
+  }
+
+  /* A centered, scrollable picker stays inside even narrow or short viewports. */
+  .terapedia-language-panel {
+    position: fixed;
+    top: 50%;
+    right: auto;
+    left: 50%;
+    width: min(22rem, calc(100vw - 1.5rem));
+    max-height: min(32rem, calc(100dvh - 2rem));
+    margin-top: 0;
+    transform: translate(-50%, -50%);
+  }
 }
 
 /* Custom precision range input */

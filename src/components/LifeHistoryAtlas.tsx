@@ -390,9 +390,9 @@ export function LifeHistoryAtlas({
       className={`fixed inset-0 z-50 w-screen h-screen flex flex-col overflow-hidden ${shellBg}`}
     >
       {/* Wikipedia-Style Masthead */}
-      <header className={`px-3 md:px-5 py-2.5 border-b shrink-0 flex flex-wrap items-center justify-between gap-2.5 ${headerBg}`}>
+      <header className={`terapedia-header relative z-30 px-3 md:px-5 py-2.5 border-b shrink-0 flex flex-wrap items-center justify-between gap-2.5 ${headerBg}`}>
         {/* Brand + Mobile Nav button */}
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="terapedia-brand flex items-center gap-2.5 min-w-0">
           <button
             type="button"
             onClick={() => setMobileNavOpen((v) => !v)}
@@ -426,7 +426,7 @@ export function LifeHistoryAtlas({
         </div>
 
         {/* Wikipedia Live Search Bar */}
-        <div className="relative flex-1 min-w-[210px] max-w-md order-3 sm:order-2 w-full sm:w-auto">
+        <div className="terapedia-search relative flex-1 min-w-[210px] max-w-md order-3 sm:order-2 w-full sm:w-auto">
           <Search className={`w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none ${mutedText}`} />
           <input
             type="text"
@@ -531,23 +531,29 @@ export function LifeHistoryAtlas({
         </div>
 
         {/* Right Controls: Language Picker + Close */}
-        <div className="flex items-center gap-1.5 shrink-0 order-2 sm:order-3">
+        <div className="terapedia-actions flex items-center gap-1.5 shrink-0 order-2 sm:order-3">
           {/* Language Selector Dropdown */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setLangMenuOpen((v) => !v)}
               aria-expanded={langMenuOpen}
+              aria-controls="terapedia-language-menu"
               aria-label={`Select Wikipedia language (${activeLangDisplay})`}
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border rounded whitespace-nowrap shrink-0 transition-colors bg-[#f8f9fa] border-[#a2a9b1] text-[#3366cc] hover:bg-[#eaecf0]"
             >
               <Languages className="w-3.5 h-3.5" />
-              <span>{activeLangDisplay}</span>
-              <ChevronDown className="w-3 h-3" />
+              <span className="terapedia-language-name truncate">{activeLangDisplay}</span>
+              <ChevronDown className="w-3 h-3 shrink-0" />
             </button>
 
             {langMenuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 border rounded-lg shadow-2xl z-50 overflow-hidden bg-white border-[#bdbdbd] text-[#111111]">
+              <div
+                id="terapedia-language-menu"
+                role="dialog"
+                aria-label={ui.languagesLabel}
+                className="terapedia-language-panel absolute right-0 top-full mt-1.5 flex max-h-[min(28rem,calc(100dvh-5rem))] w-72 flex-col overflow-hidden rounded-lg border border-[#bdbdbd] bg-white text-[#111111] shadow-2xl z-50 sm:w-80"
+              >
                 <div className={`px-3 py-2 border-b flex items-center justify-between ${subtleBorder}`}>
                   <span className="text-xs font-semibold">{ui.languagesLabel}</span>
                   <button
@@ -571,7 +577,7 @@ export function LifeHistoryAtlas({
                   />
                 </div>
 
-                <div className="max-h-72 overflow-y-auto p-2 space-y-2 terra-scroll">
+                <div className="min-h-0 flex-1 overflow-y-auto p-2 space-y-2 terra-scroll">
                   <div className="grid grid-cols-2 gap-1">
                     {FEATURED_WIKI_LANGUAGES.filter((l) =>
                       !langFilter.trim()
@@ -645,7 +651,7 @@ export function LifeHistoryAtlas({
             className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border rounded whitespace-nowrap shrink-0 transition-colors bg-[#f7f7f7] border-[#bdbdbd] text-[#111111] hover:bg-[#ebebeb]"
           >
             <X className="w-3.5 h-3.5" />
-            <span>{ui.closeLabel}</span>
+            <span className="terapedia-close-label truncate">{ui.closeLabel}</span>
           </button>
         </div>
       </header>

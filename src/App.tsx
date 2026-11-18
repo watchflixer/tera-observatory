@@ -465,17 +465,19 @@ export default function App() {
         }}
       />
 
-      <LifeHistoryAtlas
-        open={lifeAtlasOpen}
-        onClose={() => setLifeAtlasOpen(false)}
-        selectedEra={selectedHistory}
-        onSelectEraOnGlobe={handleSelectEraFromAtlas}
-        initialEntryId={lifeAtlasEntryId}
-        initialEraTopicId={lifeAtlasEraTopicId}
-        initialCategory={lifeAtlasCategory}
-        initialStatus={lifeAtlasStatus}
-        initialTab={lifeAtlasTab}
-      />
+      {lifeAtlasOpen && (
+        <LifeHistoryAtlas
+          open
+          onClose={() => setLifeAtlasOpen(false)}
+          selectedEra={selectedHistory}
+          onSelectEraOnGlobe={handleSelectEraFromAtlas}
+          initialEntryId={lifeAtlasEntryId}
+          initialEraTopicId={lifeAtlasEraTopicId}
+          initialCategory={lifeAtlasCategory}
+          initialStatus={lifeAtlasStatus}
+          initialTab={lifeAtlasTab}
+        />
+      )}
     </main>
   );
 }
