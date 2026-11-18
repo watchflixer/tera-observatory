@@ -103,6 +103,7 @@ export const EXTINCT_SPECIMENS: ExtinctSpecimen[] = [
   {
     id: 'tyrannosaurus-rex',
     imageUrl: `${import.meta.env.BASE_URL}extinct/tyrannosaurus-rex.jpg`,
+    videoUrl: `${import.meta.env.BASE_URL}extinct/tyrannosaurus-rex.mp4`,
     lifeCatalogId: 'tyrannosaurus-rex',
     name: 'Tyrannosaurus rex',
     scientificName: 'Tyrannosaurus rex',
