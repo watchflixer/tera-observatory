@@ -5,6 +5,8 @@ import { EarthViewport } from './components/EarthViewport';
 import { ExtinctAtlasModal } from './components/ExtinctAtlasModal';
 import { LifeHistoryAtlas, type AtlasSectionTab } from './components/LifeHistoryAtlas';
 import { ShopButton } from './components/ShopButton';
+import { ShopPage } from './components/ShopPage';
+
 import { TopBar } from './components/TopBar';
 import {
   EARTH_LANDMARKS,
@@ -24,7 +26,16 @@ import {
   type InspectedLocation,
 } from './utils/geocoding';
 
+const isShopHash = () => /^#shop(?:-(?:plans|terms|privacy|sources))?$/.test(window.location.hash);
+
 export default function App() {
+  const [shopOpen, setShopOpen] = useState(isShopHash);
+  useEffect(() => {
+    const syncRoute = () => setShopOpen(isShopHash());
+    window.addEventListener('hashchange', syncRoute);
+    return () => window.removeEventListener('hashchange', syncRoute);
+  }, []);
+
   const sceneRef = useRef<EarthScene | null>(null);
   const clickGeocodeAbortRef = useRef<AbortController | null>(null);
   const zoomGeocodeAbortRef = useRef<AbortController | null>(null);
@@ -80,7 +91,7 @@ export default function App() {
   // Keyboard shortcut 'H' for Zen Mode (Full View) and responsive mobile dossier behavior
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (isShopHash() || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key.toLowerCase() === 'h') {
         setZenMode((z) => !z);
       }
@@ -365,6 +376,10 @@ export default function App() {
     ]
   );
 
+  if (shopOpen) {
+    return <ShopPage onBack={() => { window.location.hash = ''; }} />;
+  }
+
   return (
     <main
       className="relative w-screen h-screen overflow-hidden bg-[#000000]"
@@ -398,7 +413,7 @@ export default function App() {
         zenMode={zenMode}
       />
 
-      {!zenMode && <ShopButton />}
+      {!zenMode && <ShopButton onOpen={() => { window.location.hash = 'shop'; }} />}
 
       <DossierPanel
         mode={mode}

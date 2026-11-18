@@ -1,18 +1,16 @@
-import { ShoppingCart, X } from 'lucide-react';
-import { useState } from 'react';
+import { ShoppingCart } from 'lucide-react';
 
-/** A placeholder for the future shop; no payment or checkout is connected. */
-export function ShopButton() {
-  const [open, setOpen] = useState(false);
+interface ShopButtonProps {
+  onOpen: () => void;
+}
 
+export function ShopButton({ onOpen }: ShopButtonProps) {
   return (
     <div className="fixed right-0 top-28 z-40">
       <button
         type="button"
-        aria-label="Shop"
-        aria-expanded={open}
-        aria-controls="shop-placeholder"
-        onClick={() => setOpen((value) => !value)}
+        aria-label="Open shop"
+        onClick={onOpen}
         className="relative flex h-11 w-12 items-center justify-center overflow-hidden rounded-l-xl border border-r-0 border-[#eea739] text-[#38200a] transition-[filter] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
         style={{
           background: 'linear-gradient(180deg, #ffe0a0 0%, #f9b340 22%, #ec8b18 50%, #c96d0e 51%, #e99426 100%)',
@@ -23,23 +21,6 @@ export function ShopButton() {
         <ShoppingCart className="relative z-10 h-5 w-5" aria-hidden="true" />
         <span className="shop-button-sparkle" aria-hidden="true">✦</span>
       </button>
-      {open && (
-        <div
-          id="shop-placeholder"
-          role="status"
-          className="absolute right-14 top-0 flex w-max max-w-[calc(100vw-5rem)] items-center gap-3 rounded-lg border border-neutral-700 bg-[#141414] px-3 py-2 text-xs text-white shadow-xl"
-        >
-          <span>Shop coming soon.</span>
-          <button
-            type="button"
-            aria-label="Close shop notice"
-            onClick={() => setOpen(false)}
-            className="rounded p-1 text-neutral-400 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e0a43b]"
-          >
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
