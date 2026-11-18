@@ -52,14 +52,14 @@ export default function App() {
   } | null>(null);
 
   const leafletBaseLayer = 'satellite' as const;
-  const [showLeafletLabels, setShowLeafletLabels] = useState<boolean>(true);
+  const [showLeafletLabels, setShowLeafletLabels] = useState<boolean>(false);
 
-  const [showClouds, setShowClouds] = useState<boolean>(false);
+  const [showClouds, setShowClouds] = useState<boolean>(true);
   const [showTectonics, setShowTectonics] = useState<boolean>(false);
   const [showMagnetosphere, setShowMagnetosphere] = useState<boolean>(false);
   const [showAxis, setShowAxis] = useState<boolean>(false);
-  const [showLandmarks, setShowLandmarks] = useState<boolean>(true);
-  const [showSatellites, setShowSatellites] = useState<boolean>(true);
+  const [showLandmarks, setShowLandmarks] = useState<boolean>(false);
+  const [showSatellites, setShowSatellites] = useState<boolean>(false);
   const [showAsteroids, setShowAsteroids] = useState<boolean>(true);
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
 
@@ -123,7 +123,6 @@ export default function App() {
     } else {
       setCutawayDegrees(0);
       setExplodeFactor(0);
-      setShowLandmarks(true);
       sceneRef.current?.focusCameraPreset('systems');
     }
   }, []);
