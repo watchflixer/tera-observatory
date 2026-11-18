@@ -22,7 +22,6 @@ import {
   searchLocationByName,
   type InspectedLocation,
 } from './utils/geocoding';
-import { prehistoricAudio } from './utils/prehistoricAudio';
 
 export default function App() {
   const sceneRef = useRef<EarthScene | null>(null);
@@ -52,7 +51,7 @@ export default function App() {
   } | null>(null);
 
   const leafletBaseLayer = 'satellite' as const;
-  const [showLeafletLabels, setShowLeafletLabels] = useState<boolean>(false);
+  const [showLeafletLabels, setShowLeafletLabels] = useState<boolean>(true);
 
   const [showClouds, setShowClouds] = useState<boolean>(true);
   const [showTectonics, setShowTectonics] = useState<boolean>(false);
@@ -458,7 +457,6 @@ export default function App() {
         onToggleZenMode={() => setZenMode((v) => !v)}
         onOpenLifeAtlas={() => handleOpenLifeAtlas()}
         onOpenExtinctAtlas={() => {
-          prehistoricAudio.unlock();
           setExtinctModalOpen(true);
         }}
       />
