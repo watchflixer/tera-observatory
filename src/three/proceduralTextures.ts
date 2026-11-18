@@ -266,7 +266,7 @@ export interface EarthTextureBundle {
   cloudsMap: THREE.CanvasTexture;
   tectonicMap: THREE.CanvasTexture;
   crossSectionMap: THREE.CanvasTexture;
-  historyMaps: Record<HistoryEraId, THREE.CanvasTexture>;
+  getHistoryMap: (era: HistoryEraId) => THREE.CanvasTexture;
   disposeAll: () => void;
 }
 
@@ -275,7 +275,8 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
   const H = 512;
 
   const landMask = drawPolygonsToMask(LANDMASS_POLYGONS, W, H, 4);
-  const pangaeaMask = drawPolygonsToMask(PANGAEA_POLYGONS, W, H, 5);
+  // The Pangaea mask is only needed for the Paleozoic view.
+  let pangaeaMask: Uint8ClampedArray | undefined;
 
   const albedoCanvas = document.createElement('canvas');
   albedoCanvas.width = W;
@@ -298,6 +299,8 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
   for (let y = 0; y < H; y++) {
     const lat = 90 - (y / H) * 180;
     const absLat = Math.abs(lat);
+    const aridBand = Math.exp(-Math.pow((absLat - 24) / 12, 2));
+    const tropic = Math.exp(-Math.pow(absLat / 20, 2));
     for (let x = 0; x < W; x++) {
       const idx = (y * W + x) * 4;
       const lon = (x / W) * 360 - 180;
@@ -324,7 +327,6 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
         rough = 224;
         bump = 110 + Math.round(ridge * 140);
 
-        const aridBand = Math.exp(-Math.pow((absLat - 24) / 12, 2));
         const saharaBoost = lon > -15 && lon < 62 && lat > 12 && lat < 36 ? 0.45 : 0;
         const australiaBoost = lon > 115 && lon < 146 && lat < -18 && lat > -32 ? 0.45 : 0;
         const desertness = Math.min(1, aridBand * n1 * 1.35 + saharaBoost + australiaBoost);
@@ -338,7 +340,6 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
           g = 140 + Math.round(n2 * 26);
           b = 92 + Math.round(n2 * 18);
         } else {
-          const tropic = Math.exp(-Math.pow(absLat / 20, 2));
           r = Math.round(28 + (1 - tropic) * 34 + n2 * 18);
           g = Math.round(86 + tropic * 28 + n1 * 26);
           b = Math.round(38 + (1 - tropic) * 18 + n2 * 14);
@@ -392,9 +393,10 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
     const lat = 90 - (y / H) * 180;
     const itcz = Math.exp(-Math.pow(lat / 10, 2)) * 0.14;
     const midLat = Math.exp(-Math.pow((Math.abs(lat) - 48) / 14, 2)) * 0.16;
+    const cloudWave = Math.sin(y * 0.04) * 1.4;
     for (let x = 0; x < W; x++) {
       const idx = (y * W + x) * 4;
-      const swirl = fbm(x * 0.014 + Math.sin(y * 0.04) * 1.4, y * 0.022, 4);
+      const swirl = fbm(x * 0.014 + cloudWave, y * 0.022, 4);
       const density = Math.max(0, Math.min(1, (swirl + itcz + midLat - 0.52) * 2.4));
       cloudsImg.data[idx] = 248;
       cloudsImg.data[idx + 1] = 251;
@@ -476,9 +478,12 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
       const dx = (x - half) / half;
       const dy = (y - half) / half;
       const rNorm = Math.sqrt(dx * dx + dy * dy);
-      const angle = Math.atan2(dy, dx);
-      const grain = fbm(x * 0.06, y * 0.06, 3);
-      const plume = fbm(Math.cos(angle) * 4 + rNorm * 6, Math.sin(angle) * 4 + rNorm * 6, 3);
+      // Only calculate noise in the rings that actually use it.
+      const grain = rNorm > 0.54 && rNorm <= 0.965 ? fbm(x * 0.06, y * 0.06, 3) : 0;
+      const angle = rNorm > 0.22 && rNorm <= 0.54 ? Math.atan2(dy, dx) : 0;
+      const plume = rNorm > 0.22 && rNorm <= 0.54
+        ? fbm(Math.cos(angle) * 4 + rNorm * 6, Math.sin(angle) * 4 + rNorm * 6, 3)
+        : 0;
       const idx = (y * sliceSize + x) * 4;
 
       let r = 20;
@@ -538,6 +543,9 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
 
   const buildEraTexture = (era: HistoryEraId): THREE.CanvasTexture => {
     if (era === 'cenozoic') return modernAlbedo;
+    if (era === 'paleozoic' && !pangaeaMask) {
+      pangaeaMask = drawPolygonsToMask(PANGAEA_POLYGONS, W, H, 5);
+    }
 
     const ew = 512;
     const eh = 256;
@@ -591,7 +599,7 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
             b = Math.round(245 + n1 * 10);
           }
         } else if (era === 'paleozoic') {
-          const pMask = pangaeaMask[maskIdx] / 255 + (n1 - 0.5) * 0.25;
+          const pMask = pangaeaMask![maskIdx] / 255 + (n1 - 0.5) * 0.25;
           if (pMask > 0.52) {
             const inland = Math.min(1, (pMask - 0.52) * 2.2);
             r = Math.round(52 + inland * 88);
@@ -630,13 +638,16 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
     return tex;
   };
 
-  const historyMaps: Record<HistoryEraId, THREE.CanvasTexture> = {
-    hadean: buildEraTexture('hadean'),
-    archean: buildEraTexture('archean'),
-    proterozoic: buildEraTexture('proterozoic'),
-    paleozoic: buildEraTexture('paleozoic'),
-    mesozoic: buildEraTexture('mesozoic'),
-    cenozoic: modernAlbedo,
+  // Generate each historical map only if the user visits that era, then reuse it.
+  const historyMaps = new Map<HistoryEraId, THREE.CanvasTexture>();
+  const getHistoryMap = (era: HistoryEraId) => {
+    if (era === 'cenozoic') return modernAlbedo;
+    let texture = historyMaps.get(era);
+    if (!texture) {
+      texture = buildEraTexture(era);
+      historyMaps.set(era, texture);
+    }
+    return texture;
   };
 
   return {
@@ -646,7 +657,7 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
     cloudsMap,
     tectonicMap,
     crossSectionMap,
-    historyMaps,
+    getHistoryMap,
     disposeAll: () => {
       modernAlbedo.dispose();
       roughnessMap.dispose();
@@ -654,7 +665,8 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
       cloudsMap.dispose();
       tectonicMap.dispose();
       crossSectionMap.dispose();
-      Object.values(historyMaps).forEach((t) => t.dispose());
+      historyMaps.forEach((texture) => texture.dispose());
+      historyMaps.clear();
     },
   };
 }

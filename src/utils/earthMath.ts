@@ -230,6 +230,22 @@ export function latLonToTileXY(
   return { x, y };
 }
 
+/** Return the stable 4×4 detail-tile window for a camera target. */
+export function getDetailTileWindow(lat: number, lon: number, zoom: number) {
+  const clampedZoom = Math.max(4, Math.min(6, zoom));
+  const clampedLat = Math.max(-76, Math.min(76, lat));
+  const tileCount = 1 << clampedZoom;
+  const { x: cx, y: cy } = latLonToTileXY(clampedLat, lon, clampedZoom);
+  const wrappedLon = ((((lon + 180) % 360) + 360) % 360) - 180;
+  const fx = ((wrappedLon + 180) / 360) * tileCount;
+  const fy = latToMercatorNormY(clampedLat) * tileCount;
+  const anchorX = Number.isFinite(fx) ? Math.round(fx) : cx;
+  const anchorY = Number.isFinite(fy) ? Math.round(fy) : cy;
+  const txStart = anchorX - 2;
+  const tyStart = Math.max(0, Math.min(tileCount - 4, anchorY - 2));
+  return { clampedZoom, tileCount, txStart, txEnd: txStart + 3, tyStart, tyEnd: Math.min(tileCount - 1, tyStart + 3) };
+}
+
 /**
  * Converts a rectangular Slippy Map tile range [xMin..xMax, yMin..yMax] at zoom z
  * back into geographic lat/lon bounds (degrees).

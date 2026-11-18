@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ControlDock } from './components/ControlDock';
 import { DossierPanel } from './components/DossierPanel';
 import { EarthViewport } from './components/EarthViewport';
-import { ExtinctAtlasModal } from './components/ExtinctAtlasModal';
-import { LifeHistoryAtlas, type AtlasSectionTab } from './components/LifeHistoryAtlas';
+import type { AtlasSectionTab } from './components/LifeHistoryAtlas';
 import { ShopButton } from './components/ShopButton';
-import { ShopPage } from './components/ShopPage';
 
 import { TopBar } from './components/TopBar';
 import {
@@ -27,14 +25,39 @@ import {
 } from './utils/geocoding';
 
 const isShopHash = () => /^#shop(?:-(?:plans|terms|privacy|sources))?$/.test(window.location.hash);
+const ShopPage = lazy(() => import('./components/ShopPage').then((module) => ({ default: module.ShopPage })));
+const LifeHistoryAtlas = lazy(() => import('./components/LifeHistoryAtlas').then((module) => ({ default: module.LifeHistoryAtlas })));
+const ExtinctAtlasModal = lazy(() => import('./components/ExtinctAtlasModal').then((module) => ({ default: module.ExtinctAtlasModal })));
+
+function LoadingOverlay({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-[#101010] text-neutral-200" role="status">
+      <p>Loading…</p>
+      <button type="button" onClick={onBack} className="rounded-md border border-neutral-600 px-4 py-2 text-sm hover:border-[#e0a43b]">Back</button>
+    </div>
+  );
+}
 
 export default function App() {
   const [shopOpen, setShopOpen] = useState(isShopHash);
+  const [observatoryMounted, setObservatoryMounted] = useState(() => !isShopHash());
   useEffect(() => {
-    const syncRoute = () => setShopOpen(isShopHash());
+    const syncRoute = () => {
+      const nextShopOpen = isShopHash();
+      if (!nextShopOpen) setObservatoryMounted(true);
+      setShopOpen(nextShopOpen);
+    };
     window.addEventListener('hashchange', syncRoute);
     return () => window.removeEventListener('hashchange', syncRoute);
   }, []);
+
+  // When arriving directly at the shop, let its UI paint before preparing the
+  // globe in the background. Once mounted, retain the scene for quick returns.
+  useEffect(() => {
+    if (observatoryMounted) return;
+    const timer = window.setTimeout(() => setObservatoryMounted(true), 1000);
+    return () => window.clearTimeout(timer);
+  }, [observatoryMounted]);
 
   const sceneRef = useRef<EarthScene | null>(null);
   const clickGeocodeAbortRef = useRef<AbortController | null>(null);
@@ -87,6 +110,7 @@ export default function App() {
   const [lifeAtlasStatus, setLifeAtlasStatus] = useState<LifeStatus | 'all'>('all');
   const [lifeAtlasTab, setLifeAtlasTab] = useState<AtlasSectionTab>('article');
   const [extinctModalOpen, setExtinctModalOpen] = useState<boolean>(false);
+  const [extinctLoaded, setExtinctLoaded] = useState<boolean>(false);
 
   // Keyboard shortcut 'H' for Zen Mode (Full View) and responsive mobile dossier behavior
   useEffect(() => {
@@ -350,7 +374,7 @@ export default function App() {
       showAsteroids,
       autoRotate,
       dossierOpen,
-      paused: extinctModalOpen || lifeAtlasOpen,
+      paused: shopOpen || extinctModalOpen || lifeAtlasOpen,
     }),
     [
       mode,
@@ -373,129 +397,151 @@ export default function App() {
       dossierOpen,
       extinctModalOpen,
       lifeAtlasOpen,
+      shopOpen,
     ]
   );
 
-  if (shopOpen) {
-    return <ShopPage onBack={() => { window.location.hash = ''; }} />;
-  }
+  const handleCloseShop = useCallback(() => {
+    setObservatoryMounted(true);
+    setShopOpen(false);
+    window.location.hash = '';
+  }, []);
 
   return (
-    <main
-      className="relative w-screen h-screen overflow-hidden bg-[#000000]"
-      data-mode={mode}
-      data-interior={selectedInterior}
-      data-atmosphere={selectedAtmosphere}
-      data-history={selectedHistory}
-      data-map-layer={leafletBaseLayer}
-    >
-      <TopBar
-        mode={mode}
-        onModeChange={handleModeChange}
-        onResetView={handleResetView}
-        zenMode={zenMode}
-      />
+    <>
+      {observatoryMounted && (
+        <main
+          className="relative w-screen h-screen overflow-hidden bg-[#000000]"
+          style={{ visibility: shopOpen ? 'hidden' : 'visible' }}
+          aria-hidden={shopOpen}
+          inert={shopOpen}
+          data-mode={mode}
+          data-interior={selectedInterior}
+          data-atmosphere={selectedAtmosphere}
+          data-history={selectedHistory}
+          data-map-layer={leafletBaseLayer}
+        >
+          <TopBar
+            mode={mode}
+            onModeChange={handleModeChange}
+            onResetView={handleResetView}
+            zenMode={zenMode}
+          />
 
-      <EarthViewport
-        sceneState={sceneState}
-        sceneRef={sceneRef}
-        onSelectInterior={handleSelectInterior}
-        onSelectAtmosphere={handleSelectAtmosphere}
-        onSelectLandmark={handleSelectLandmark}
-        onInspectLocation={handleInspectLocation}
-        onSelectSpaceObject={(obj) => handleSelectSpaceObject(obj)}
-        onCameraZoomUpdate={handleCameraZoomUpdate}
-        cameraTelemetry={cameraTelemetry}
-        inspectedLocation={inspectedLocation}
-        onZoomToInspected={handleZoomToInspected}
-        onClearInspected={handleClearInspected}
-        dossierOpen={dossierOpen}
-        zenMode={zenMode}
-      />
+          <EarthViewport
+            sceneState={sceneState}
+            sceneRef={sceneRef}
+            onSelectInterior={handleSelectInterior}
+            onSelectAtmosphere={handleSelectAtmosphere}
+            onSelectLandmark={handleSelectLandmark}
+            onInspectLocation={handleInspectLocation}
+            onSelectSpaceObject={(obj) => handleSelectSpaceObject(obj)}
+            onCameraZoomUpdate={handleCameraZoomUpdate}
+            cameraTelemetry={cameraTelemetry}
+            inspectedLocation={inspectedLocation}
+            onZoomToInspected={handleZoomToInspected}
+            onClearInspected={handleClearInspected}
+            dossierOpen={dossierOpen}
+            zenMode={zenMode}
+          />
 
-      {!zenMode && <ShopButton onOpen={() => { window.location.hash = 'shop'; }} />}
+          {!zenMode && <ShopButton onOpen={() => { setShopOpen(true); window.location.hash = 'shop'; }} />}
 
-      <DossierPanel
-        mode={mode}
-        selectedInterior={selectedInterior}
-        selectedAtmosphere={selectedAtmosphere}
-        selectedHistory={selectedHistory}
-        selectedLandmarkId={selectedLandmarkId}
-        onSelectLandmark={handleSelectLandmark}
-        inspectedLocation={inspectedLocation}
-        onSearchLocation={handleSearchLocation}
-        onZoomToInspected={handleZoomToInspected}
-        onClearInspected={handleClearInspected}
-        selectedSpaceObject={selectedSpaceObject}
-        onSelectSpaceObject={handleSelectSpaceObject}
-        onOpenLifeAtlas={handleOpenLifeAtlas}
-        open={dossierOpen}
-        onToggleOpen={() => setDossierOpen((o) => !o)}
-        zenMode={zenMode}
-      />
+          <DossierPanel
+            mode={mode}
+            selectedInterior={selectedInterior}
+            selectedAtmosphere={selectedAtmosphere}
+            selectedHistory={selectedHistory}
+            selectedLandmarkId={selectedLandmarkId}
+            onSelectLandmark={handleSelectLandmark}
+            inspectedLocation={inspectedLocation}
+            onSearchLocation={handleSearchLocation}
+            onZoomToInspected={handleZoomToInspected}
+            onClearInspected={handleClearInspected}
+            selectedSpaceObject={selectedSpaceObject}
+            onSelectSpaceObject={handleSelectSpaceObject}
+            onOpenLifeAtlas={handleOpenLifeAtlas}
+            open={dossierOpen}
+            onToggleOpen={() => setDossierOpen((o) => !o)}
+            zenMode={zenMode}
+          />
 
-      <ControlDock
-        dossierOpen={dossierOpen}
-        mode={mode}
-        onModeChange={handleModeChange}
-        cutawayDegrees={cutawayDegrees}
-        onCutawayChange={setCutawayDegrees}
-        explodeFactor={explodeFactor}
-        onExplodeChange={setExplodeFactor}
-        selectedInterior={selectedInterior}
-        onSelectInterior={handleSelectInterior}
-        selectedAtmosphere={selectedAtmosphere}
-        onSelectAtmosphere={handleSelectAtmosphere}
-        selectedHistory={selectedHistory}
-        onSelectHistory={setSelectedHistory}
-        showLeafletLabels={showLeafletLabels}
-        onToggleLeafletLabels={() => setShowLeafletLabels((v) => !v)}
-        showClouds={showClouds}
-        onToggleClouds={() => setShowClouds((v) => !v)}
-        showTectonics={showTectonics}
-        onToggleTectonics={() => setShowTectonics((v) => !v)}
-        showMagnetosphere={showMagnetosphere}
-        onToggleMagnetosphere={() => setShowMagnetosphere((v) => !v)}
-        showLandmarks={showLandmarks}
-        onToggleLandmarks={() => setShowLandmarks((v) => !v)}
-        showSatellites={showSatellites}
-        onToggleSatellites={() => setShowSatellites((v) => !v)}
-        showAsteroids={showAsteroids}
-        onToggleAsteroids={() => setShowAsteroids((v) => !v)}
-        autoRotate={autoRotate}
-        onToggleAutoRotate={() => setAutoRotate((v) => !v)}
-        dockCollapsed={dockCollapsed}
-        onToggleDockCollapsed={() => setDockCollapsed((v) => !v)}
-        zenMode={zenMode}
-        onToggleZenMode={() => setZenMode((v) => !v)}
-        onOpenLifeAtlas={() => handleOpenLifeAtlas()}
-        onOpenExtinctAtlas={() => {
-          setExtinctModalOpen(true);
-        }}
-      />
+          <ControlDock
+            dossierOpen={dossierOpen}
+            mode={mode}
+            onModeChange={handleModeChange}
+            cutawayDegrees={cutawayDegrees}
+            onCutawayChange={setCutawayDegrees}
+            explodeFactor={explodeFactor}
+            onExplodeChange={setExplodeFactor}
+            selectedInterior={selectedInterior}
+            onSelectInterior={handleSelectInterior}
+            selectedAtmosphere={selectedAtmosphere}
+            onSelectAtmosphere={handleSelectAtmosphere}
+            selectedHistory={selectedHistory}
+            onSelectHistory={setSelectedHistory}
+            showLeafletLabels={showLeafletLabels}
+            onToggleLeafletLabels={() => setShowLeafletLabels((v) => !v)}
+            showClouds={showClouds}
+            onToggleClouds={() => setShowClouds((v) => !v)}
+            showTectonics={showTectonics}
+            onToggleTectonics={() => setShowTectonics((v) => !v)}
+            showMagnetosphere={showMagnetosphere}
+            onToggleMagnetosphere={() => setShowMagnetosphere((v) => !v)}
+            showLandmarks={showLandmarks}
+            onToggleLandmarks={() => setShowLandmarks((v) => !v)}
+            showSatellites={showSatellites}
+            onToggleSatellites={() => setShowSatellites((v) => !v)}
+            showAsteroids={showAsteroids}
+            onToggleAsteroids={() => setShowAsteroids((v) => !v)}
+            autoRotate={autoRotate}
+            onToggleAutoRotate={() => setAutoRotate((v) => !v)}
+            dockCollapsed={dockCollapsed}
+            onToggleDockCollapsed={() => setDockCollapsed((v) => !v)}
+            zenMode={zenMode}
+            onToggleZenMode={() => setZenMode((v) => !v)}
+            onOpenLifeAtlas={() => handleOpenLifeAtlas()}
+            onOpenExtinctAtlas={() => {
+              setExtinctLoaded(true);
+              setExtinctModalOpen(true);
+            }}
+          />
 
-      <ExtinctAtlasModal
-        open={extinctModalOpen}
-        onClose={() => setExtinctModalOpen(false)}
-        onOpenInTerapedia={(entryId) => {
-          setExtinctModalOpen(false);
-          handleOpenLifeAtlas({ entryId });
-        }}
-      />
+          {extinctLoaded && (
+            <Suspense fallback={extinctModalOpen && !shopOpen ? <LoadingOverlay onBack={() => setExtinctModalOpen(false)} /> : null}>
+              <ExtinctAtlasModal
+                open={extinctModalOpen && !shopOpen}
+                onClose={() => setExtinctModalOpen(false)}
+                onOpenInTerapedia={(entryId) => {
+                  setExtinctModalOpen(false);
+                  handleOpenLifeAtlas({ entryId });
+                }}
+              />
+            </Suspense>
+          )}
 
-      {lifeAtlasOpen && (
-        <LifeHistoryAtlas
-          open
-          onClose={() => setLifeAtlasOpen(false)}
-          selectedEra={selectedHistory}
-          onSelectEraOnGlobe={handleSelectEraFromAtlas}
-          initialEntryId={lifeAtlasEntryId}
-          initialEraTopicId={lifeAtlasEraTopicId}
-          initialCategory={lifeAtlasCategory}
-          initialStatus={lifeAtlasStatus}
-          initialTab={lifeAtlasTab}
-        />
+          {lifeAtlasOpen && !shopOpen && (
+            <Suspense fallback={<LoadingOverlay onBack={() => setLifeAtlasOpen(false)} />}>
+              <LifeHistoryAtlas
+                open
+                onClose={() => setLifeAtlasOpen(false)}
+                selectedEra={selectedHistory}
+                onSelectEraOnGlobe={handleSelectEraFromAtlas}
+                initialEntryId={lifeAtlasEntryId}
+                initialEraTopicId={lifeAtlasEraTopicId}
+                initialCategory={lifeAtlasCategory}
+                initialStatus={lifeAtlasStatus}
+                initialTab={lifeAtlasTab}
+              />
+            </Suspense>
+          )}
+        </main>
       )}
-    </main>
+      {shopOpen && (
+        <Suspense fallback={<LoadingOverlay onBack={handleCloseShop} />}>
+          <ShopPage onBack={handleCloseShop} />
+        </Suspense>
+      )}
+    </>
   );
 }
