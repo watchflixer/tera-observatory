@@ -56,18 +56,22 @@ const LANDMASS_POLYGONS: Array<Array<[number, number]>> = [
   ],
 ];
 
-// Stylized snapshots, not precise plate reconstructions. A late Paleozoic
-// Pangaea and a Mesozoic breakup help distinguish these very long eras.
+// Illustrative late Paleozoic (Permian) Pangaea, not a plate reconstruction:
+// one connected supercontinent, with Laurasia to the north, Gondwana to the
+// south, and a broad Tethys embayment opening to the east. The surrounding
+// ocean represents Panthalassa. Earlier Paleozoic continents were separate.
 const PANGAEA_POLYGONS: Array<Array<[number, number]>> = [
   [
-    [-72, 48], [-61, 62], [-42, 67], [-20, 72], [5, 69], [26, 64], [49, 61],
-    [68, 53], [89, 47], [103, 35], [93, 26], [77, 27], [67, 19], [55, 22],
-    [46, 15], [35, 14], [24, 5], [31, -5], [44, -10], [48, -23], [37, -31],
-    [34, -43], [18, -54], [-1, -61], [-18, -58], [-30, -49], [-37, -36],
-    [-49, -31], [-53, -17], [-48, -5], [-58, 4], [-70, 17], [-76, 32], [-72, 48],
+    [-103, 44], [-100, 55], [-88, 61], [-76, 66], [-59, 68], [-43, 72],
+    [-26, 69], [-7, 71], [12, 67], [29, 68], [47, 63], [61, 60],
+    [78, 58], [92, 53], [106, 46], [102, 37], [93, 31], [79, 29],
+    [68, 23], [56, 23], [46, 19], [32, 18], [18, 14], [5, 9],
+    [-1, 4], [4, -2], [15, -6], [30, -10], [42, -13], [53, -20],
+    [64, -28], [62, -37], [53, -42], [47, -49], [34, -55], [23, -62],
+    [6, -65], [-9, -69], [-23, -65], [-31, -57], [-39, -47], [-50, -40],
+    [-55, -29], [-62, -18], [-66, -8], [-75, 1], [-80, 14], [-90, 23],
+    [-98, 30], [-103, 44],
   ],
-  [[-115, 28], [-103, 35], [-91, 30], [-88, 19], [-101, 13], [-114, 18]],
-  [[116, 18], [127, 25], [136, 21], [133, 11], [120, 9]],
 ];
 
 const MESOZOIC_POLYGONS: Array<Array<[number, number]>> = [
@@ -431,6 +435,7 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
   cloudsCtx.putImageData(cloudsImg, 0, 0);
   const cloudsMap = new THREE.CanvasTexture(cloudsCanvas);
   cloudsMap.colorSpace = THREE.SRGBColorSpace;
+  cloudsMap.wrapS = THREE.RepeatWrapping;
   cloudsMap.anisotropy = maxAnisotropy;
 
   // Tectonic plate boundaries overlay
@@ -667,6 +672,8 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = maxAnisotropy;
+    // The Paleozoic map may be centered toward the current viewpoint.
+    if (era === 'paleozoic') tex.wrapS = THREE.RepeatWrapping;
     return tex;
   };
 

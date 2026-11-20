@@ -35,6 +35,7 @@ import {
 } from './proceduralTextures';
 import { createSpaceObjectsSystem, type SpaceObjectsSystem } from './spaceObjects';
 import { createHadeanMaterial } from './hadeanMaterial';
+import { advanceCloudDrift, alignCloudShell, applyCloudDrift } from './cloudShell';
 
 export interface SceneControlState {
   mode: ObservatoryMode;
@@ -261,6 +262,7 @@ export class EarthScene {
   private sliceCapOne: THREE.Mesh;
   private sliceCapTwo: THREE.Mesh;
   private cloudsMesh: THREE.Mesh;
+  private cloudDrift = 0;
   private tectonicMesh: THREE.Mesh;
   private atmosphereMeshes = new Map<AtmosphereLayerId, THREE.Mesh>();
   private atmosphereMaterials = new Map<AtmosphereLayerId, THREE.ShaderMaterial>();
@@ -984,6 +986,13 @@ export class EarthScene {
 
     if (prevEra !== next.selectedHistory || prevMode !== next.mode) {
       this.updateSurfaceForEra();
+      if (next.mode === 'history' && next.selectedHistory === 'paleozoic') {
+        // Put the Pangaea-facing hemisphere in view when this era is selected,
+        // without changing the user's camera, spin setting, or other era maps.
+        const cameraInGlobe = this.earthSpinGroup.worldToLocal(this.camera.position.clone());
+        const { lon } = vector3ToLatLon(cameraInGlobe.x, cameraInGlobe.y, cameraInGlobe.z);
+        this.textures.getHistoryMap('paleozoic').offset.x = (-15 - lon) / 360;
+      }
     }
 
     if (prevDossier !== next.dossierOpen) {
@@ -1417,6 +1426,9 @@ export class EarthScene {
         mesh.position.set(-offset * 0.55 * dir, offset * 0.25 * dir, offset * 0.45 * dir);
       });
 
+      const crust = this.interiorMeshes.get('crust');
+      if (crust) alignCloudShell(this.cloudsMesh, crust);
+
       const hideCaps = this.smoothExplode >= 0.12 || this.smoothCutawayDeg <= 2.0;
       this.sliceCapOne.visible = !hideCaps;
       this.sliceCapTwo.visible = !hideCaps;
@@ -1430,7 +1442,8 @@ export class EarthScene {
       if (this.state.autoRotate && this.state.cutawayDegrees < 5) {
         this.earthSpinGroup.rotation.y += delta * 0.085;
       }
-      this.cloudsMesh.rotation.y += delta * 0.018;
+      this.cloudDrift = advanceCloudDrift(this.cloudDrift, delta);
+      applyCloudDrift(this.cloudsMesh.material as THREE.MeshStandardMaterial, this.cloudDrift);
       this.spaceObjects.update(delta, elapsed);
 
       // Smooth spherical great-circle camera transition (always finishes on schedule across hemispheres)

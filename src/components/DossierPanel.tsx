@@ -282,7 +282,10 @@ export function DossierPanel({
             </div>
 
             <p className="text-[13px] leading-relaxed text-neutral-300">{era.summary}</p>
-            {(era.id === 'paleozoic' || era.id === 'mesozoic') && (
+            {era.id === 'paleozoic' && (
+              <p className="text-[11px] leading-relaxed text-neutral-500">The globe illustrates Pangaea in the late Paleozoic; continents were arranged differently earlier in the era.</p>
+            )}
+            {era.id === 'mesozoic' && (
               <p className="text-[11px] leading-relaxed text-neutral-500">Globe depicts an illustrative snapshot, not a precise reconstruction of the entire era.</p>
             )}
 
