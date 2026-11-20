@@ -4,7 +4,6 @@ import {
   ATMOSPHERE_LAYERS,
   HISTORY_ERAS,
   INTERIOR_LAYERS,
-  LEAFLET_BASE_LAYERS,
   type AtmosphereLayerId,
   type HistoryEraId,
   type InteriorLayerId,
@@ -113,9 +112,6 @@ export function EarthViewport({
     sceneState.selectedAtmosphere,
     sceneState.selectedHistory
   );
-
-  const activeLeafletMeta =
-    LEAFLET_BASE_LAYERS.find((b) => b.id === sceneState.leafletBaseLayer) ?? LEAFLET_BASE_LAYERS[0];
 
   return (
     <div className="relative w-full h-full">
@@ -235,14 +231,6 @@ export function EarthViewport({
         </div>
       )}
 
-      {/* Subtle Leaflet Attribution (Bottom-Left Desktop, strictly bounded so it never touches ControlDock) */}
-      {!zenMode && (sceneState.mode !== 'history' || sceneState.selectedHistory === 'cenozoic') && (
-        <div className="fixed bottom-4 left-4 z-10 hidden xl:flex items-center pointer-events-none">
-          <div className="text-[11px] text-neutral-400 bg-[#141414]/92 border border-neutral-800 rounded-md px-2.5 py-1 max-w-[235px] truncate">
-            {activeLeafletMeta.attribution}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
