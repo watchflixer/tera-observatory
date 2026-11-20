@@ -29,6 +29,23 @@ const isAboutHash = () => /^#(?:about(?:-(?:overview|donate|terms|privacy|source
 const LifeHistoryAtlas = lazy(() => import('./components/LifeHistoryAtlas').then((module) => ({ default: module.LifeHistoryAtlas })));
 const ExtinctAtlasModal = lazy(() => import('./components/ExtinctAtlasModal').then((module) => ({ default: module.ExtinctAtlasModal })));
 
+// Shared by the initial view and Reset View so the defaults cannot drift apart.
+const DEFAULT_GLOBE_CONTROLS = {
+  showLeafletLabels: true,
+  showClouds: true,
+  showTectonics: false,
+  showMagnetosphere: false,
+  showLandmarks: false,
+  showSatellites: false,
+  showAsteroids: true,
+  autoRotate: true,
+} as const;
+
+const DEFAULT_INTERIOR_LAYER: InteriorLayerId = 'inner-core';
+const DEFAULT_INTERIOR_CUTAWAY = 95;
+const DEFAULT_ATMOSPHERE_LAYER: AtmosphereLayerId = 'troposphere';
+const DEFAULT_HISTORY_ERA: HistoryEraId = 'hadean';
+
 export default function App() {
   const [aboutOpen, setAboutOpen] = useState(isAboutHash);
   const [observatoryMounted, setObservatoryMounted] = useState(() => !isAboutHash());
@@ -59,8 +76,8 @@ export default function App() {
   const [cutawayDegrees, setCutawayDegrees] = useState<number>(0);
   const [explodeFactor, setExplodeFactor] = useState<number>(0);
 
-  const [selectedInterior, setSelectedInterior] = useState<InteriorLayerId>('inner-core');
-  const [selectedAtmosphere, setSelectedAtmosphere] = useState<AtmosphereLayerId>('troposphere');
+  const [selectedInterior, setSelectedInterior] = useState<InteriorLayerId>(DEFAULT_INTERIOR_LAYER);
+  const [selectedAtmosphere, setSelectedAtmosphere] = useState<AtmosphereLayerId>(DEFAULT_ATMOSPHERE_LAYER);
   const [selectedHistory, setSelectedHistory] = useState<HistoryEraId>('cenozoic');
   const [selectedLandmarkId, setSelectedLandmarkId] = useState<string | null>('everest');
 
@@ -77,15 +94,15 @@ export default function App() {
   } | null>(null);
 
   const leafletBaseLayer = 'satellite' as const;
-  const [showLeafletLabels, setShowLeafletLabels] = useState<boolean>(true);
+  const [showLeafletLabels, setShowLeafletLabels] = useState<boolean>(DEFAULT_GLOBE_CONTROLS.showLeafletLabels);
 
-  const [showClouds, setShowClouds] = useState<boolean>(true);
-  const [showTectonics, setShowTectonics] = useState<boolean>(false);
-  const [showMagnetosphere, setShowMagnetosphere] = useState<boolean>(false);
-  const [showLandmarks, setShowLandmarks] = useState<boolean>(false);
-  const [showSatellites, setShowSatellites] = useState<boolean>(false);
-  const [showAsteroids, setShowAsteroids] = useState<boolean>(true);
-  const [autoRotate, setAutoRotate] = useState<boolean>(true);
+  const [showClouds, setShowClouds] = useState<boolean>(DEFAULT_GLOBE_CONTROLS.showClouds);
+  const [showTectonics, setShowTectonics] = useState<boolean>(DEFAULT_GLOBE_CONTROLS.showTectonics);
+  const [showMagnetosphere, setShowMagnetosphere] = useState<boolean>(DEFAULT_GLOBE_CONTROLS.showMagnetosphere);
+  const [showLandmarks, setShowLandmarks] = useState<boolean>(DEFAULT_GLOBE_CONTROLS.showLandmarks);
+  const [showSatellites, setShowSatellites] = useState<boolean>(DEFAULT_GLOBE_CONTROLS.showSatellites);
+  const [showAsteroids, setShowAsteroids] = useState<boolean>(DEFAULT_GLOBE_CONTROLS.showAsteroids);
+  const [autoRotate, setAutoRotate] = useState<boolean>(DEFAULT_GLOBE_CONTROLS.autoRotate);
 
   const [dossierOpen, setDossierOpen] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
@@ -134,7 +151,7 @@ export default function App() {
       setExtinctModalOpen(false);
     }
     if (nextMode === 'interior') {
-      setCutawayDegrees((deg) => (deg < 20 ? 95 : deg));
+      setCutawayDegrees((deg) => (deg < 20 ? DEFAULT_INTERIOR_CUTAWAY : deg));
       sceneRef.current?.focusCameraPreset('cutaway');
     } else if (nextMode === 'atmosphere') {
       setCutawayDegrees(0);
@@ -143,7 +160,7 @@ export default function App() {
     } else if (nextMode === 'history') {
       setCutawayDegrees(0);
       setExplodeFactor(0);
-      setSelectedHistory((prev) => (prev === 'cenozoic' ? 'hadean' : prev));
+      setSelectedHistory((prev) => (prev === 'cenozoic' ? DEFAULT_HISTORY_ERA : prev));
       sceneRef.current?.focusCameraPreset('reset');
     } else {
       setCutawayDegrees(0);
@@ -194,9 +211,25 @@ export default function App() {
   }, []);
 
   const handleResetView = useCallback(() => {
+    // Reset every view's controls together, regardless of the active view.
+    setShowLeafletLabels(DEFAULT_GLOBE_CONTROLS.showLeafletLabels);
+    setShowClouds(DEFAULT_GLOBE_CONTROLS.showClouds);
+    setShowTectonics(DEFAULT_GLOBE_CONTROLS.showTectonics);
+    setShowMagnetosphere(DEFAULT_GLOBE_CONTROLS.showMagnetosphere);
+    setShowLandmarks(DEFAULT_GLOBE_CONTROLS.showLandmarks);
+    setShowSatellites(DEFAULT_GLOBE_CONTROLS.showSatellites);
+    setShowAsteroids(DEFAULT_GLOBE_CONTROLS.showAsteroids);
+    setAutoRotate(DEFAULT_GLOBE_CONTROLS.autoRotate);
+    setSelectedInterior(DEFAULT_INTERIOR_LAYER);
+    setSelectedAtmosphere(DEFAULT_ATMOSPHERE_LAYER);
+    setSelectedHistory(DEFAULT_HISTORY_ERA);
+    setSelectedLandmarkId('everest');
+    setSelectedSpaceObject(null);
+    setCutawayDegrees(mode === 'interior' ? DEFAULT_INTERIOR_CUTAWAY : 0);
+    setExplodeFactor(0);
+
+    // Keep the current view and restore its own camera framing.
     if (mode === 'interior') {
-      setCutawayDegrees(95);
-      setExplodeFactor(0);
       sceneRef.current?.focusCameraPreset('cutaway');
     } else if (mode === 'atmosphere') {
       sceneRef.current?.focusCameraPreset('atmosphere');

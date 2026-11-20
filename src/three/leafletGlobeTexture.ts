@@ -33,10 +33,18 @@ const detailPatchCache = new Map<string, LeafletDetailPatchResult>();
 function loadTileImage(url: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
+    const finish = (result: HTMLImageElement | null) => {
+      clearTimeout(timeout);
+      img.onload = null;
+      img.onerror = null;
+      resolve(result);
+    };
+    // A stalled tile must not hold the entire globe at its fallback resolution.
+    const timeout = window.setTimeout(() => finish(null), 12000);
     img.crossOrigin = 'anonymous';
     img.decoding = 'async';
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
+    img.onload = () => finish(img);
+    img.onerror = () => finish(null);
     img.src = url;
   });
 }
@@ -80,7 +88,9 @@ async function buildLeafletEquirectangularTexture(
 
   const tiles = await Promise.all(jobs);
   const loadedCount = tiles.filter((t) => t.base !== null).length;
-  if (loadedCount === 0) {
+  // Never replace a complete fallback with a higher-resolution map containing
+  // blank tiles. A failed upgrade can be retried on the next layer request.
+  if (loadedCount !== tiles.length) {
     return null;
   }
 
@@ -176,57 +186,73 @@ export function loadLeafletGlobeTexture(
   let cancelled = false;
   const key = `${layerId}:${showOverlayLabels ? 'labels' : 'clean'}`;
 
+  const disposeResult = (result: LeafletGlobeTextureResult) => {
+    result.map.dispose();
+    result.roughnessMap?.dispose();
+  };
+  const upgrade = () => {
+    if (cancelled || (textureCache.get(key)?.zoom ?? 0) >= 3) return;
+    // Stage 2: 64 tiles, producing a 2048×1024 global texture.
+    buildLeafletEquirectangularTexture(layerId, showOverlayLabels, 3, maxAnisotropy)
+      .catch(() => null)
+      .then((z3) => {
+        if (!z3) return;
+        if (cancelled) {
+          disposeResult(z3);
+          return;
+        }
+        const prev = textureCache.get(key);
+        if (prev && prev.zoom >= z3.zoom) {
+          disposeResult(z3);
+          onReady(prev);
+          return;
+        }
+        textureCache.set(key, z3);
+        onReady(z3);
+        if (prev) disposeResult(prev);
+      });
+  };
+
   const cached = textureCache.get(key);
   if (cached) {
     onReady(cached);
-    return () => {
-      cancelled = true;
-    };
+    // A previously cancelled upgrade must not leave this view permanently blurry.
+    upgrade();
+  } else {
+    // Stage 1: Fast z=2 global composite (16 tiles). Try z=3 even if this fails.
+    buildLeafletEquirectangularTexture(layerId, showOverlayLabels, 2, maxAnisotropy)
+      .catch(() => null)
+      .then((z2) => {
+        if (cancelled) {
+          if (z2) disposeResult(z2);
+          return;
+        }
+        if (z2) {
+          const existing = textureCache.get(key);
+          if (existing) {
+            disposeResult(z2);
+            onReady(existing);
+          } else {
+            textureCache.set(key, z2);
+            onReady(z2);
+          }
+        }
+        upgrade();
+      });
   }
 
-  // Stage 1: Fast z=2 global composite (16 tiles)
-  buildLeafletEquirectangularTexture(layerId, showOverlayLabels, 2, maxAnisotropy).then((z2) => {
-    if (cancelled || !z2) return;
-    if (!textureCache.has(key)) {
-      textureCache.set(key, z2);
-      onReady(z2);
-    } else {
-      z2.map.dispose();
-      z2.roughnessMap?.dispose();
-    }
-
-    // Stage 2: High-res z=3 global composite (64 tiles = 2048x1024)
-    buildLeafletEquirectangularTexture(layerId, showOverlayLabels, 3, maxAnisotropy).then((z3) => {
-      if (cancelled || !z3) {
-        if (z3) {
-          z3.map.dispose();
-          z3.roughnessMap?.dispose();
-        }
-        return;
-      }
-      const prev = textureCache.get(key);
-      textureCache.set(key, z3);
-      onReady(z3);
-      if (prev && prev !== z3) {
-        prev.map.dispose();
-        prev.roughnessMap?.dispose();
-      }
-    });
-  });
-
-  return () => {
-    cancelled = true;
-  };
+  return () => { cancelled = true; };
 }
 
-export function getDetailPatchKey(layerId: LeafletBaseLayerId, showOverlayLabels: boolean, lat: number, lon: number, zoom: number): string {
-  const { clampedZoom, txStart, tyStart } = getDetailTileWindow(lat, lon, zoom);
-  return `${layerId}:${showOverlayLabels ? 'L' : 'C'}:z${clampedZoom}:x${txStart}:y${tyStart}`;
+export function getDetailPatchKey(layerId: LeafletBaseLayerId, showOverlayLabels: boolean, lat: number, lon: number, zoom: number, size: 4 | 6 = 4): string {
+  const { clampedZoom, txStart, tyStart } = getDetailTileWindow(lat, lon, zoom, size);
+  return `${layerId}:${showOverlayLabels ? 'L' : 'C'}:z${clampedZoom}:s${size}:x${txStart}:y${tyStart}`;
 }
 
 /**
- * Loads a localized high-resolution Leaflet tile patch (z=4..z=6) centered on the user's
- * zoomed-in camera target, reprojected onto a sub-sphere patch for Google-Earth-like zoom crispness.
+ * Loads a localized high-resolution Leaflet tile patch (z=4..z=6) centered on the
+ * camera target. A wider z=4 patch improves the opening view without fetching a
+ * complete 256-tile world map.
  */
 export function loadLeafletDetailPatch(
   layerId: LeafletBaseLayerId,
@@ -236,11 +262,12 @@ export function loadLeafletDetailPatch(
   zoom: number,
   maxAnisotropy: number,
   onReady: (patch: LeafletDetailPatchResult) => void,
-  onFailure?: () => void
+  onFailure?: () => void,
+  size: 4 | 6 = 4
 ): () => void {
   let cancelled = false;
-  const { clampedZoom, tileCount, txStart, txEnd, tyStart, tyEnd } = getDetailTileWindow(centerLat, centerLon, zoom);
-  const key = getDetailPatchKey(layerId, showOverlayLabels, centerLat, centerLon, zoom);
+  const { clampedZoom, tileCount, txStart, txEnd, tyStart, tyEnd } = getDetailTileWindow(centerLat, centerLon, zoom, size);
+  const key = getDetailPatchKey(layerId, showOverlayLabels, centerLat, centerLon, zoom, size);
   const cached = detailPatchCache.get(key);
   if (cached) {
     onReady(cached);
@@ -286,7 +313,9 @@ export function loadLeafletDetailPatch(
   Promise.all(jobs).then((tiles) => {
     if (cancelled) return;
     const loaded = tiles.filter((t) => t.base !== null).length;
-    if (loaded === 0) {
+    const labelsIncomplete = showOverlayLabels && !!cfg.overlayUrl && tiles.some((t) => t.overlay === null);
+    if (loaded !== tiles.length || labelsIncomplete) {
+      // Keep the global map instead of covering it with blank or unlabelled tiles.
       onFailure?.();
       return;
     }
@@ -339,8 +368,8 @@ export function loadLeafletDetailPatch(
       key,
     };
 
-    // Keep detail patch cache bounded to avoid unbounded GPU texture memory
-    if (detailPatchCache.size >= 10) {
+    // A wide patch is 1536×1536; limit retained canvases and GPU textures.
+    if (detailPatchCache.size >= 3) {
       const oldestKey = detailPatchCache.keys().next().value;
       if (oldestKey) {
         detailPatchCache.get(oldestKey)?.map.dispose();
