@@ -230,8 +230,8 @@ export function latLonToTileXY(
   return { x, y };
 }
 
-/** Return the stable 4×4 detail-tile window for a camera target. */
-export function getDetailTileWindow(lat: number, lon: number, zoom: number) {
+/** Return a stable detail-tile window for a camera target. */
+export function getDetailTileWindow(lat: number, lon: number, zoom: number, size: 4 | 6 = 4) {
   const clampedZoom = Math.max(4, Math.min(6, zoom));
   const clampedLat = Math.max(-76, Math.min(76, lat));
   const tileCount = 1 << clampedZoom;
@@ -239,11 +239,13 @@ export function getDetailTileWindow(lat: number, lon: number, zoom: number) {
   const wrappedLon = ((((lon + 180) % 360) + 360) % 360) - 180;
   const fx = ((wrappedLon + 180) / 360) * tileCount;
   const fy = latToMercatorNormY(clampedLat) * tileCount;
-  const anchorX = Number.isFinite(fx) ? Math.round(fx) : cx;
-  const anchorY = Number.isFinite(fy) ? Math.round(fy) : cy;
-  const txStart = anchorX - 2;
-  const tyStart = Math.max(0, Math.min(tileCount - 4, anchorY - 2));
-  return { clampedZoom, tileCount, txStart, txEnd: txStart + 3, tyStart, tyEnd: Math.min(tileCount - 1, tyStart + 3) };
+  // A wider patch can move in two-tile steps: less churn while the globe spins.
+  const step = size === 6 ? 2 : 1;
+  const anchorX = Number.isFinite(fx) ? Math.round(fx / step) * step : cx;
+  const anchorY = Number.isFinite(fy) ? Math.round(fy / step) * step : cy;
+  const txStart = anchorX - size / 2;
+  const tyStart = Math.max(0, Math.min(tileCount - size, anchorY - size / 2));
+  return { clampedZoom, tileCount, txStart, txEnd: txStart + size - 1, tyStart, tyEnd: tyStart + size - 1 };
 }
 
 /**

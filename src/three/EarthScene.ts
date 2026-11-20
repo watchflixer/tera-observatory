@@ -36,6 +36,7 @@ import {
 import { createSpaceObjectsSystem, type SpaceObjectsSystem } from './spaceObjects';
 import { createHadeanMaterial } from './hadeanMaterial';
 import { advanceCloudDrift, alignCloudShell, applyCloudDrift } from './cloudShell';
+import { getGlobeDetailZoom, getRenderPixelRatio } from './renderQuality';
 
 export interface SceneControlState {
   mode: ObservatoryMode;
@@ -238,6 +239,11 @@ export class EarthScene {
   private leafletTex: LeafletGlobeTextureResult | null = null;
   private detailPatchMesh: THREE.Mesh;
   private detailPatchMat: THREE.MeshStandardMaterial;
+  private detailUniforms = {
+    uBaseMap: { value: null as THREE.Texture | null },
+    uPatchOffset: { value: new THREE.Vector2() },
+    uPatchScale: { value: new THREE.Vector2(1, 1) },
+  };
   private activeDetailPatchKey = '';
   private requestedDetailPatchKey = '';
   private cancelPhotoLoad: () => void = () => {};
@@ -317,9 +323,8 @@ export class EarthScene {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.02;
-    // Avoid rendering four physical pixels for every CSS pixel on high-DPI phones.
-    const pixelRatioCap = window.matchMedia('(pointer: coarse)').matches ? 1.5 : 2;
-    this.renderer.setPixelRatio(this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, pixelRatioCap));
+    // Keep the 3D Globe crisp on phones while retaining bounded rendering costs.
+    this.renderer.setPixelRatio(getRenderPixelRatio(initialState.mode, window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches, this.isSoftwareGl));
     this.renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
     this.renderer.shadowMap.enabled = !this.isSoftwareGl;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -391,12 +396,34 @@ export class EarthScene {
     // Google-Earth dynamic high-res Leaflet zoom patch overlay
     this.detailPatchMat = new THREE.MeshStandardMaterial({
       roughness: 0.86,
-      metalness: 0.03,
+      metalness: 0.04,
       envMapIntensity: 0.04,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
+    // Blend the high-resolution region into the current global map and sample
+    // night lights in global coordinates, rather than drawing a visible rectangle.
+    this.detailPatchMat.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, this.detailUniforms, this.nightUniforms);
+      shader.vertexShader = 'varying vec3 vWorldNormal;\n' + shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\nvWorldNormal = normalize(mat3(modelMatrix) * normal);'
+      );
+      shader.fragmentShader =
+        'uniform sampler2D uBaseMap;\nuniform sampler2D uNightMap;\nuniform vec2 uPatchOffset;\nuniform vec2 uPatchScale;\nuniform vec3 uSunDir;\nuniform float uUseNightLights;\nvarying vec3 vWorldNormal;\n' +
+        shader.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+          vec2 globalUv = vec2(fract(uPatchOffset.x + vMapUv.x * uPatchScale.x), uPatchOffset.y + vMapUv.y * uPatchScale.y);
+          float edge = min(min(vMapUv.x, 1.0 - vMapUv.x), min(vMapUv.y, 1.0 - vMapUv.y));
+          diffuseColor.rgb = mix(texture2D(uBaseMap, globalUv).rgb, diffuseColor.rgb, smoothstep(0.0, 0.08, edge));`)
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+          float sunDot = dot(normalize(vWorldNormal), normalize(uSunDir));
+          float nightMask = smoothstep(0.12, -0.24, sunDot);
+          float twilight = exp(-pow((sunDot + 0.02) / 0.14, 2.0));
+          vec3 nightCol = texture2D(uNightMap, globalUv).rgb;
+          totalEmissiveRadiance += nightCol * nightMask * 1.7 * uUseNightLights;
+          totalEmissiveRadiance += vec3(0.95, 0.42, 0.14) * twilight * uUseNightLights * 0.14;`);
+    };
     this.detailPatchMesh = new THREE.Mesh(
       new THREE.SphereGeometry(EARTH_RADIUS * 1.0018, 32, 24, 0, 0.2, 1.4, 0.2),
       this.detailPatchMat
@@ -922,9 +949,12 @@ export class EarthScene {
     this.activeDetailPatchKey = '';
     this.requestedDetailPatchKey = '';
     this.detailPatchMesh.visible = false;
+    this.leafletTex = null;
+    this.updateSurfaceForEra();
     this.cancelLeafletLoad = loadLeafletGlobeTexture(layerId, showLabels, this.maxAniso, (res) => {
       if (this.disposed) return;
       this.leafletTex = res;
+      this.detailUniforms.uBaseMap.value = res.map;
       this.updateSurfaceForEra();
     });
   }
@@ -935,6 +965,8 @@ export class EarthScene {
 
     this.activeDetailPatchKey = patch.key;
     const { latNorth, latSouth, lonWest, lonEast } = patch.bounds;
+    this.detailUniforms.uPatchOffset.value.set((lonWest + 180) / 360, (latSouth + 90) / 180);
+    this.detailUniforms.uPatchScale.value.set((lonEast - lonWest) / 360, (latNorth - latSouth) / 180);
     const phiStart = (lonWest * Math.PI) / 180 + Math.PI;
     const phiLength = ((lonEast - lonWest) * Math.PI) / 180;
     const thetaStart = Math.PI / 2 - (latNorth * Math.PI) / 180;
@@ -943,8 +975,8 @@ export class EarthScene {
     const oldGeo = this.detailPatchMesh.geometry;
     this.detailPatchMesh.geometry = new THREE.SphereGeometry(
       EARTH_RADIUS * 1.0018,
-      36,
-      26,
+      64,
+      48,
       phiStart,
       phiLength,
       thetaStart,
@@ -954,7 +986,7 @@ export class EarthScene {
 
     const isSatellite = this.state.leafletBaseLayer === 'satellite';
     this.detailPatchMat.map = patch.map;
-    this.detailPatchMat.roughness = isSatellite ? 0.84 : 0.92;
+    this.detailPatchMat.roughness = isSatellite ? 0.85 : 0.92;
     this.detailPatchMat.needsUpdate = true;
     this.detailPatchMesh.visible = true;
   }
@@ -967,6 +999,10 @@ export class EarthScene {
     const prevLeafletLayer = this.state.leafletBaseLayer;
     const prevLeafletLabels = this.state.showLeafletLabels;
     this.state = { ...next };
+    if (prevMode !== next.mode) {
+      const ratio = getRenderPixelRatio(next.mode, window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches, this.isSoftwareGl);
+      if (this.renderer.getPixelRatio() !== ratio) this.renderer.setPixelRatio(ratio);
+    }
     if (wasPaused && !next.paused && !this.documentHidden) this.wakePausedLoop?.();
 
     this.applyStateToScene();
@@ -1233,8 +1269,7 @@ export class EarthScene {
       if (!this.userHasInteracted && !this.cameraAnimating) {
         this.camera.position.copy(getHomeCameraPosition(w / h));
       }
-      const pixelRatioCap = window.matchMedia('(pointer: coarse)').matches ? 1.5 : 2;
-      this.renderer.setPixelRatio(this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, pixelRatioCap));
+      this.renderer.setPixelRatio(getRenderPixelRatio(this.state.mode, window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches, this.isSoftwareGl));
       this.renderer.setSize(w, h);
       if (!this.state.paused && !this.documentHidden) this.renderer.render(this.scene, this.camera);
     };
@@ -1506,9 +1541,16 @@ export class EarthScene {
           this.callbacks.onCameraZoomUpdate({ centerCoords, altitudeKm, leafletZoom });
         }
 
-        if (leafletZoom >= 4 && this.state.cutawayDegrees <= 1) {
-          const key = getDetailPatchKey(this.state.leafletBaseLayer, this.state.showLeafletLabels, centerCoords.lat, centerCoords.lon, leafletZoom);
-          // Do not cancel and restart the same 4×4 tile request every frame check.
+        const detailZoom = getGlobeDetailZoom(postFlightDist, leafletZoom);
+        const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+        const widePatch = this.state.leafletBaseLayer === 'satellite' && detailZoom === 4 && !saveData && !this.isSoftwareGl && this.renderer.capabilities.maxTextureSize >= 1536;
+        const patchSize: 4 | 6 = widePatch ? 6 : 4;
+        // Other map providers, Data Saver and software rendering retain the cheaper
+        // global view until zoomed in rather than prefetching at the opening view.
+        const detailEnabled = (this.state.leafletBaseLayer === 'satellite' && !saveData && !this.isSoftwareGl) || postFlightDist <= 5.4;
+        if (detailEnabled && this.leafletTex && detailZoom >= 4 && this.state.cutawayDegrees <= 1) {
+          const key = getDetailPatchKey(this.state.leafletBaseLayer, this.state.showLeafletLabels, centerCoords.lat, centerCoords.lon, detailZoom, patchSize);
+          // Do not cancel and restart the same tile request every frame check.
           if (key !== this.requestedDetailPatchKey && now - this.lastDetailTileTrigger > 550) {
             this.lastDetailTileTrigger = now;
             this.cancelDetailPatchLoad();
@@ -1518,16 +1560,17 @@ export class EarthScene {
               this.state.showLeafletLabels,
               centerCoords.lat,
               centerCoords.lon,
-              leafletZoom,
+              detailZoom,
               this.maxAniso,
               (patch) => this.applyDetailPatch(patch),
               () => {
                 if (this.requestedDetailPatchKey === key) {
                   this.requestedDetailPatchKey = '';
                   // Back off after a network failure rather than continuously retrying.
-                  this.lastDetailTileTrigger = performance.now() + 3450;
+                  this.lastDetailTileTrigger = performance.now() + 14450;
                 }
-              }
+              },
+              patchSize
             );
           }
         } else {

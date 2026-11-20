@@ -26,7 +26,7 @@ export function AboutDisclosures() {
         <h3>Explore Earth, life and deep time.</h3>
         <p>Terra Observatory is an interactive educational and exploratory website. Its globe presents Earth’s surface and planetary systems alongside visualizations of its interior, atmosphere and geological history. The Field Guide provides context and controls, and visitors can explore locations, landmarks, maps, cloud cover, rotation, tectonic features, satellites and asteroids.</p>
         <p>TerraPedia connects visitors to encyclopedia articles, search, languages and image galleries. The extinct-life showcase presents species and habitats using illustrations, reconstructions, videos and sound. Some views are modeled or artistic representations, not live observations. Images, scientific figures, maps and descriptions may be simplified, incomplete or out of date; they are not a substitute for navigation, safety advice or professional research.</p>
-        <p>This page also explains the project, its sources and the intended optional donation feature. Donations are not currently active.</p>
+        <p>This page also explains the project, its sources and how visitors may offer optional support by transferring funds through their own bank or e-wallet app.</p>
       </article>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -38,11 +38,11 @@ export function AboutDisclosures() {
           <h4>Educational content and availability</h4>
           <p>The site is intended for general education and exploration. Information and imagery can contain errors or change without notice. Features depend on browser support, internet access and outside providers and may be unavailable or changed. No specific uptime, accuracy or performance level has been established.</p>
           <h4>Donations</h4>
-          <p>Donations are intended as optional support for the project. The donation button is disabled and no donation provider is connected, so no donation is currently accepted through this page. Before accepting donations, the operator must identify the recipient and provider and confirm the intended use of funds, any fees and applicable refund policy. A MariBank account alone does not connect a donation service.</p>
+          <p>Donations are voluntary support for the project. The Donate button shows a MariBank account for an independent bank transfer; the website does not process payments or automatically verify receipt. The sending bank or e-wallet may charge fees or require additional recipient details. Check the recipient and fees in your app before sending. Refund rules and a support contact have not yet been established; consult your sending provider about transfer concerns.</p>
           <h4>Ownership and links</h4>
           <p>Project materials and third-party materials may have different owners and licenses. No project-wide license or ownership claim is established here. Visitors must obtain any permissions needed for copying, commercial use or redistribution; links to other sites do not imply endorsement or transfer of rights. See Rights &amp; credits below.</p>
           <h4>Operator and questions</h4>
-          <p>Operator name, business or legal details, support contact, applicable jurisdiction and final consumer terms are pending. These details and the final policy need legal review before collecting donations.</p>
+          <p>Operator name, business or legal details, support contact, applicable jurisdiction and final consumer terms are pending. These details and the final policy require review.</p>
         </article>
 
         <article id="about-privacy" className="shop-legal-card scroll-mt-24">
@@ -54,7 +54,7 @@ export function AboutDisclosures() {
           <p>When you use TerraPedia, article titles, search terms, selected language and related image queries are sent to Wikipedia or Wikimedia Commons. Images and thumbnails may be loaded from Wikimedia servers. Searches could contain personal information, so avoid entering sensitive details.</p>
           <h4>Storage, accounts and payments</h4>
           <p>The inspected application code keeps some location and encyclopedia results in memory while it runs. Browsers and service providers may independently cache resources or keep logs; their retention periods have not been verified. The current site has no account registration, payment form or donation processor. No site-specific analytics or advertising integration was identified in the inspected source; this is not a statement about all host or provider logging.</p>
-          <p>If accounts, payment or donations are added, the operator must explain what information is collected, why, the payment provider and recipients, legal basis, safeguards, international transfers and retention periods before processing begins. Do not send banking passwords, PINs or one-time codes through the site or to the operator.</p>
+          <p>Donations are made outside this site through the sender’s bank or e-wallet and MariBank, which process transaction information under their own policies. The website itself does not receive the payment or confirm transfers. If a payment form or processor is added, its data practices must be explained before processing begins. Do not send banking passwords, PINs or one-time codes through the site or to the operator.</p>
           <h4>Your choices and rights</h4>
           <p>You can avoid optional searches, leave the site, manage browser caches and settings, and consult each provider’s privacy policy. Applicable privacy laws may give you rights relating to your personal data. The operator must publish a privacy contact, how to make a request, complaint details and the actual retention and deletion practices; these are not yet supplied.</p>
           <p>Third-party services control their own processing. This draft requires review for the actual deployment and applicable law, including the Philippine Data Privacy Act where applicable.</p>

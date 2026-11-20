@@ -233,6 +233,17 @@ test('filterLifeCatalog filters cleanly by query, category, status, and geologic
 
 
 
+test('wide detail windows cover more of the globe while limiting rotation churn', () => {
+  const wide = getDetailTileWindow(0, 0, 4, 6);
+  assert.deepEqual(wide, { clampedZoom: 4, tileCount: 16, txStart: 5, txEnd: 10, tyStart: 5, tyEnd: 10 });
+  assert.deepEqual(getDetailTileWindow(0, 10, 4, 6), wide);
+  assert.deepEqual(getDetailTileWindow(0, 180, 4, 6), getDetailTileWindow(0, -180, 4, 6));
+  const north = getDetailTileWindow(90, 0, 4, 6);
+  const south = getDetailTileWindow(-90, 0, 4, 6);
+  assert.ok(north.tyStart >= 0 && north.tyEnd < 16);
+  assert.ok(south.tyStart >= 0 && south.tyEnd < 16);
+});
+
 test('detail-tile windows remain stable within a tile region and clamp zoom and latitude', () => {
   const equator = getDetailTileWindow(0, 0, 4);
   assert.deepEqual(equator, { clampedZoom: 4, tileCount: 16, txStart: 6, txEnd: 9, tyStart: 6, tyEnd: 9 });
