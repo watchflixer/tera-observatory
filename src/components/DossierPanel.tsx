@@ -282,6 +282,9 @@ export function DossierPanel({
             </div>
 
             <p className="text-[13px] leading-relaxed text-neutral-300">{era.summary}</p>
+            {era.id === 'cenozoic' && (
+              <p className="text-[11px] leading-relaxed text-neutral-500">The globe shows present-day Earth, not a reconstruction of the entire Cenozoic Era.</p>
+            )}
             {era.id === 'paleozoic' && (
               <p className="text-[11px] leading-relaxed text-neutral-500">The globe illustrates Pangaea in the late Paleozoic; continents were arranged differently earlier in the era.</p>
             )}
