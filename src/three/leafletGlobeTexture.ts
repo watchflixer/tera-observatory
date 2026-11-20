@@ -39,7 +39,7 @@ function loadTileImage(url: string): Promise<HTMLImageElement | null> {
       img.onerror = null;
       resolve(result);
     };
-    // A stalled tile must not hold the entire globe at its fallback resolution.
+    // A stalled tile must eventually report failure so the request can retry.
     const timeout = window.setTimeout(() => finish(null), 12000);
     img.crossOrigin = 'anonymous';
     img.decoding = 'async';
@@ -56,7 +56,7 @@ async function buildLeafletEquirectangularTexture(
   maxAnisotropy: number
 ): Promise<LeafletGlobeTextureResult | null> {
   const cfg = LEAFLET_BASE_LAYERS.find((b) => b.id === layerId) ?? LEAFLET_BASE_LAYERS[0];
-  const tileCount = 1 << zoom; // 4 at z=2, 8 at z=3
+  const tileCount = 1 << zoom; // 8 at z=3
   const tileSize = 256;
   const mercSize = tileCount * tileSize;
   const subdomains = cfg.subdomains ?? 'abc';
@@ -88,8 +88,7 @@ async function buildLeafletEquirectangularTexture(
 
   const tiles = await Promise.all(jobs);
   const loadedCount = tiles.filter((t) => t.base !== null).length;
-  // Never replace a complete fallback with a higher-resolution map containing
-  // blank tiles. A failed upgrade can be retried on the next layer request.
+  // Do not publish a map containing blank tiles; the caller can retry it.
   if (loadedCount !== tiles.length) {
     return null;
   }
@@ -173,74 +172,43 @@ async function buildLeafletEquirectangularTexture(
   return { map, roughnessMap, zoom };
 }
 
-/**
- * Loads a live Leaflet tile map (EPSG:3857) progressively at z=2 then z=3,
- * reprojected into Equirectangular coordinates for Three.js SphereGeometry.
- */
+/** Load the final global map directly; do not display a low-resolution stage. */
 export function loadLeafletGlobeTexture(
   layerId: LeafletBaseLayerId,
   showOverlayLabels: boolean,
   maxAnisotropy: number,
-  onReady: (result: LeafletGlobeTextureResult) => void
+  onReady: (result: LeafletGlobeTextureResult) => void,
+  onFailure?: () => void
 ): () => void {
   let cancelled = false;
   const key = `${layerId}:${showOverlayLabels ? 'labels' : 'clean'}`;
-
-  const disposeResult = (result: LeafletGlobeTextureResult) => {
-    result.map.dispose();
-    result.roughnessMap?.dispose();
-  };
-  const upgrade = () => {
-    if (cancelled || (textureCache.get(key)?.zoom ?? 0) >= 3) return;
-    // Stage 2: 64 tiles, producing a 2048×1024 global texture.
-    buildLeafletEquirectangularTexture(layerId, showOverlayLabels, 3, maxAnisotropy)
-      .catch(() => null)
-      .then((z3) => {
-        if (!z3) return;
-        if (cancelled) {
-          disposeResult(z3);
-          return;
-        }
-        const prev = textureCache.get(key);
-        if (prev && prev.zoom >= z3.zoom) {
-          disposeResult(z3);
-          onReady(prev);
-          return;
-        }
-        textureCache.set(key, z3);
-        onReady(z3);
-        if (prev) disposeResult(prev);
-      });
-  };
-
   const cached = textureCache.get(key);
   if (cached) {
     onReady(cached);
-    // A previously cancelled upgrade must not leave this view permanently blurry.
-    upgrade();
   } else {
-    // Stage 1: Fast z=2 global composite (16 tiles). Try z=3 even if this fails.
-    buildLeafletEquirectangularTexture(layerId, showOverlayLabels, 2, maxAnisotropy)
+    buildLeafletEquirectangularTexture(layerId, showOverlayLabels, 3, maxAnisotropy)
       .catch(() => null)
-      .then((z2) => {
-        if (cancelled) {
-          if (z2) disposeResult(z2);
+      .then((result) => {
+        if (!result) {
+          if (!cancelled) onFailure?.();
           return;
         }
-        if (z2) {
-          const existing = textureCache.get(key);
-          if (existing) {
-            disposeResult(z2);
-            onReady(existing);
-          } else {
-            textureCache.set(key, z2);
-            onReady(z2);
-          }
+        if (cancelled) {
+          result.map.dispose();
+          result.roughnessMap?.dispose();
+          return;
         }
-        upgrade();
+        const existing = textureCache.get(key);
+        if (existing) {
+          result.map.dispose();
+          result.roughnessMap?.dispose();
+          onReady(existing);
+        } else {
+          textureCache.set(key, result);
+          onReady(result);
+        }
       });
   }
-
   return () => { cancelled = true; };
 }
 

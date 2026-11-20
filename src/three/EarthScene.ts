@@ -36,7 +36,7 @@ import {
 import { createSpaceObjectsSystem, type SpaceObjectsSystem } from './spaceObjects';
 import { createHadeanMaterial } from './hadeanMaterial';
 import { advanceCloudDrift, alignCloudShell, applyCloudDrift } from './cloudShell';
-import { getGlobeDetailZoom, getRenderPixelRatio } from './renderQuality';
+import { getGlobeDetailZoom, getRenderPixelRatio, isModernGlobeView } from './renderQuality';
 
 export interface SceneControlState {
   mode: ObservatoryMode;
@@ -73,6 +73,7 @@ export interface SceneCallbacks {
   }) => void;
   onHoverCoords: (coords: { lat: number; lon: number } | null) => void;
   onContextLost: () => void;
+  onGlobeImageryError: (failed: boolean) => void;
 }
 
 const EARTH_RADIUS = 2.0;
@@ -237,6 +238,9 @@ export class EarthScene {
   private maxAniso = 1;
   private photoMaps: PhotorealisticMaps | null = null;
   private leafletTex: LeafletGlobeTextureResult | null = null;
+  private globeReady = false;
+  private leafletLayerPending = false;
+  private leafletRetryTimer: number | undefined;
   private detailPatchMesh: THREE.Mesh;
   private detailPatchMat: THREE.MeshStandardMaterial;
   private detailUniforms = {
@@ -324,7 +328,7 @@ export class EarthScene {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.02;
     // Keep the 3D Globe crisp on phones while retaining bounded rendering costs.
-    this.renderer.setPixelRatio(getRenderPixelRatio(initialState.mode, window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches, this.isSoftwareGl));
+    this.renderer.setPixelRatio(getRenderPixelRatio(isModernGlobeView(initialState.mode, initialState.selectedHistory) ? 'systems' : initialState.mode, window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches, this.isSoftwareGl));
     this.renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
     this.renderer.shadowMap.enabled = !this.isSoftwareGl;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -945,22 +949,39 @@ export class EarthScene {
 
   private loadActiveLeafletLayer(layerId: LeafletBaseLayerId, showLabels: boolean): void {
     this.cancelLeafletLoad();
+    window.clearTimeout(this.leafletRetryTimer);
     this.cancelDetailPatchLoad();
-    this.activeDetailPatchKey = '';
     this.requestedDetailPatchKey = '';
-    this.detailPatchMesh.visible = false;
-    this.leafletTex = null;
-    this.updateSurfaceForEra();
+    this.leafletLayerPending = true;
+    // Keep any previously displayed map in place while the new selection loads.
     this.cancelLeafletLoad = loadLeafletGlobeTexture(layerId, showLabels, this.maxAniso, (res) => {
       if (this.disposed) return;
+      this.leafletLayerPending = false;
       this.leafletTex = res;
+      this.detailPatchMesh.visible = false;
+      this.activeDetailPatchKey = '';
       this.detailUniforms.uBaseMap.value = res.map;
+      this.callbacks.onGlobeImageryError(false);
       this.updateSurfaceForEra();
+    }, () => {
+      if (this.disposed) return;
+      this.callbacks.onGlobeImageryError(true);
+      // Retry without flashing a procedural or low-resolution globe.
+      this.leafletRetryTimer = window.setTimeout(() => {
+        this.loadActiveLeafletLayer(layerId, showLabels);
+      }, 15000);
     });
   }
 
+  private revealGlobe(): void {
+    if (this.globeReady) return;
+    this.globeReady = true;
+    this.earthTiltGroup.visible = true;
+    this.callbacks.onGlobeImageryError(false);
+  }
+
   private applyDetailPatch(patch: LeafletDetailPatchResult): void {
-    if (this.disposed || this.state.mode !== 'systems' || this.state.cutawayDegrees > 1) return;
+    if (this.disposed || !isModernGlobeView(this.state.mode, this.state.selectedHistory) || this.state.cutawayDegrees > 1) return;
     if (patch.key === this.activeDetailPatchKey && this.detailPatchMesh.visible) return;
 
     this.activeDetailPatchKey = patch.key;
@@ -989,6 +1010,7 @@ export class EarthScene {
     this.detailPatchMat.roughness = isSatellite ? 0.85 : 0.92;
     this.detailPatchMat.needsUpdate = true;
     this.detailPatchMesh.visible = true;
+    this.revealGlobe();
   }
 
   public updateState(next: SceneControlState): void {
@@ -998,9 +1020,17 @@ export class EarthScene {
     const prevDossier = this.state.dossierOpen;
     const prevLeafletLayer = this.state.leafletBaseLayer;
     const prevLeafletLabels = this.state.showLeafletLabels;
+    const wasModernGlobe = isModernGlobeView(prevMode, prevEra);
+    const modernGlobe = isModernGlobeView(next.mode, next.selectedHistory);
     this.state = { ...next };
-    if (prevMode !== next.mode) {
-      const ratio = getRenderPixelRatio(next.mode, window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches, this.isSoftwareGl);
+    if (!wasModernGlobe && modernGlobe) {
+      // Wait for the current hemisphere's detail before showing the globe,
+      // instead of flashing the global-only map on entry to either modern view.
+      this.globeReady = false;
+      this.lastDetailTileTrigger = 0;
+    }
+    if (prevMode !== next.mode || wasModernGlobe !== modernGlobe) {
+      const ratio = getRenderPixelRatio(modernGlobe ? 'systems' : next.mode, window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches, this.isSoftwareGl);
       if (this.renderer.getPixelRatio() !== ratio) this.renderer.setPixelRatio(ratio);
     }
     if (wasPaused && !next.paused && !this.documentHidden) this.wakePausedLoop?.();
@@ -1129,6 +1159,8 @@ export class EarthScene {
   }
 
   private applyStateToScene(): void {
+    // Only present-day globe views wait for their final satellite imagery.
+    this.earthTiltGroup.visible = !isModernGlobeView(this.state.mode, this.state.selectedHistory) || this.globeReady;
     this.cloudsMesh.visible =
       this.state.showClouds &&
       !(this.state.mode === 'history' && this.state.selectedHistory === 'hadean');
@@ -1187,7 +1219,7 @@ export class EarthScene {
     this.spaceObjects.asteroidsRoot.visible =
       this.state.mode === 'systems' && this.state.showAsteroids;
 
-    if (this.state.mode !== 'systems' || this.state.cutawayDegrees > 1) {
+    if (!isModernGlobeView(this.state.mode, this.state.selectedHistory) || this.state.cutawayDegrees > 1) {
       this.detailPatchMesh.visible = false;
       if (this.requestedDetailPatchKey) {
         this.cancelDetailPatchLoad();
@@ -1269,7 +1301,8 @@ export class EarthScene {
       if (!this.userHasInteracted && !this.cameraAnimating) {
         this.camera.position.copy(getHomeCameraPosition(w / h));
       }
-      this.renderer.setPixelRatio(getRenderPixelRatio(this.state.mode, window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches, this.isSoftwareGl));
+      const qualityMode = isModernGlobeView(this.state.mode, this.state.selectedHistory) ? 'systems' : this.state.mode;
+      this.renderer.setPixelRatio(getRenderPixelRatio(qualityMode, window.devicePixelRatio, window.matchMedia('(pointer: coarse)').matches, this.isSoftwareGl));
       this.renderer.setSize(w, h);
       if (!this.state.paused && !this.documentHidden) this.renderer.render(this.scene, this.camera);
     };
@@ -1345,7 +1378,7 @@ export class EarthScene {
       this.raycaster.setFromCamera(_rayMouse, this.camera);
 
       const crust = this.interiorMeshes.get('crust');
-      const hits = crust ? this.raycaster.intersectObject(crust, false) : [];
+      const hits = crust && isObjectEffectivelyVisible(crust) ? this.raycaster.intersectObject(crust, false) : [];
       if (hits.length > 0) {
         _localHit.copy(hits[0].point);
         this.earthSpinGroup.worldToLocal(_localHit);
@@ -1469,12 +1502,13 @@ export class EarthScene {
       this.sliceCapTwo.visible = !hideCaps;
 
       // Smooth axial tilt (23.44° when whole globe, 11.5° in cutaway/other views)
-      const targetTilt = this.state.mode === 'systems' ? (23.44 * Math.PI) / 180 : (11.5 * Math.PI) / 180;
+      const modernGlobeView = isModernGlobeView(this.state.mode, this.state.selectedHistory);
+      const targetTilt = modernGlobeView ? (23.44 * Math.PI) / 180 : (11.5 * Math.PI) / 180;
       this.smoothTiltRad = THREE.MathUtils.damp(this.smoothTiltRad, targetTilt, 6, delta);
       this.earthTiltGroup.rotation.z = -this.smoothTiltRad;
 
       // Planetary rotation & drifting clouds & orbiting satellites + asteroids
-      if (this.state.autoRotate && this.state.cutawayDegrees < 5) {
+      if (this.state.autoRotate && this.state.cutawayDegrees < 5 && (!modernGlobeView || this.globeReady)) {
         this.earthSpinGroup.rotation.y += delta * 0.085;
       }
       this.cloudDrift = advanceCloudDrift(this.cloudDrift, delta);
@@ -1525,7 +1559,7 @@ export class EarthScene {
         );
         this.locationPinGroup.scale.setScalar(pinScale);
       }
-      if (now - this.lastZoomCheck > 320 && this.state.mode === 'systems') {
+      if (now - this.lastZoomCheck > 320 && modernGlobeView) {
         this.lastZoomCheck = now;
         const { leafletZoom, altitudeKm } = cameraDistanceToZoomAndAltitudeKm(
           postFlightDist,
@@ -1536,7 +1570,7 @@ export class EarthScene {
         const centerCoords = vector3ToLatLon(_centerRayDir.x, _centerRayDir.y, _centerRayDir.z);
 
         const zoomKey = `${leafletZoom}:${Math.round(altitudeKm / 120)}:${centerCoords.lat.toFixed(1)},${centerCoords.lon.toFixed(1)}`;
-        if (zoomKey !== this.lastReportedZoomKey) {
+        if (this.state.mode === 'systems' && zoomKey !== this.lastReportedZoomKey) {
           this.lastReportedZoomKey = zoomKey;
           this.callbacks.onCameraZoomUpdate({ centerCoords, altitudeKm, leafletZoom });
         }
@@ -1548,7 +1582,9 @@ export class EarthScene {
         // Other map providers, Data Saver and software rendering retain the cheaper
         // global view until zoomed in rather than prefetching at the opening view.
         const detailEnabled = (this.state.leafletBaseLayer === 'satellite' && !saveData && !this.isSoftwareGl) || postFlightDist <= 5.4;
-        if (detailEnabled && this.leafletTex && detailZoom >= 4 && this.state.cutawayDegrees <= 1) {
+        if (this.leafletLayerPending) {
+          // Keep the previously displayed selection unchanged during a reload.
+        } else if (detailEnabled && this.leafletTex && detailZoom >= 4 && this.state.cutawayDegrees <= 1) {
           const key = getDetailPatchKey(this.state.leafletBaseLayer, this.state.showLeafletLabels, centerCoords.lat, centerCoords.lon, detailZoom, patchSize);
           // Do not cancel and restart the same tile request every frame check.
           if (key !== this.requestedDetailPatchKey && now - this.lastDetailTileTrigger > 550) {
@@ -1566,6 +1602,7 @@ export class EarthScene {
               () => {
                 if (this.requestedDetailPatchKey === key) {
                   this.requestedDetailPatchKey = '';
+                  if (!this.globeReady) this.callbacks.onGlobeImageryError(true);
                   // Back off after a network failure rather than continuously retrying.
                   this.lastDetailTileTrigger = performance.now() + 14450;
                 }
@@ -1579,6 +1616,9 @@ export class EarthScene {
             this.cancelDetailPatchLoad();
             this.requestedDetailPatchKey = '';
           }
+          // On Data Saver or software rendering, the final supported quality is
+          // the complete global map; no high-resolution patch is requested.
+          if (this.leafletTex && !detailEnabled) this.revealGlobe();
         }
       }
 
@@ -1612,6 +1652,7 @@ export class EarthScene {
     this.wakePausedLoop = null;
     this.cancelPhotoLoad();
     this.cancelLeafletLoad();
+    window.clearTimeout(this.leafletRetryTimer);
     this.cancelDetailPatchLoad();
     cancelAnimationFrame(this.frameId);
     clearTimeout(this.frameId);

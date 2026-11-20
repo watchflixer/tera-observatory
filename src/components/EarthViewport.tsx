@@ -11,6 +11,7 @@ import {
   type ObservatoryMode,
 } from '../data/earthData';
 import { EarthScene, type SceneControlState } from '../three/EarthScene';
+import { isModernGlobeView } from '../three/renderQuality';
 import type { InspectedLocation } from '../utils/geocoding';
 
 interface EarthViewportProps {
@@ -56,6 +57,7 @@ export function EarthViewport({
 }: EarthViewportProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [contextLost, setContextLost] = useState(false);
+  const [imageryError, setImageryError] = useState(false);
   const [hoverCoords, setHoverCoords] = useState<{ lat: number; lon: number } | null>(null);
 
   // Store callbacks in refs so React UI updates never tear down WebGL
@@ -89,6 +91,7 @@ export function EarthViewport({
       onCameraZoomUpdate: (info) => callbacksRef.current.onCameraZoomUpdate(info),
       onHoverCoords: (coords) => setHoverCoords(coords),
       onContextLost: () => setContextLost(true),
+      onGlobeImageryError: (failed) => setImageryError(failed),
     });
     sceneRef.current = engine;
 
@@ -123,6 +126,13 @@ export function EarthViewport({
         className="w-full h-full"
         aria-label="Interactive 3D Earth Observatory Viewport"
       />
+
+      {/* Only report a real imagery failure; never show a loading screen. */}
+      {imageryError && isModernGlobeView(sceneState.mode, sceneState.selectedHistory) && !contextLost && (
+        <div role="status" className="fixed bottom-24 left-3 z-20 max-w-[280px] rounded-lg border border-amber-700 bg-[#141414]/95 px-3 py-2 text-xs text-amber-100 shadow-lg">
+          Satellite imagery is unavailable. Check your connection; it will retry automatically.
+        </div>
+      )}
 
       {/* WebGL Context Lost Fallback */}
       {contextLost && (
@@ -226,7 +236,7 @@ export function EarthViewport({
       )}
 
       {/* Subtle Leaflet Attribution (Bottom-Left Desktop, strictly bounded so it never touches ControlDock) */}
-      {!zenMode && sceneState.mode !== 'history' && (
+      {!zenMode && (sceneState.mode !== 'history' || sceneState.selectedHistory === 'cenozoic') && (
         <div className="fixed bottom-4 left-4 z-10 hidden xl:flex items-center pointer-events-none">
           <div className="text-[11px] text-neutral-400 bg-[#141414]/92 border border-neutral-800 rounded-md px-2.5 py-1 max-w-[235px] truncate">
             {activeLeafletMeta.attribution}

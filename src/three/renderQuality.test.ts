@@ -1,6 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getGlobeDetailZoom, getRenderPixelRatio } from './renderQuality';
+import { getGlobeDetailZoom, getRenderPixelRatio, isModernGlobeView } from './renderQuality';
+
+test('only 3D Globe and Cenozoic history use the modern globe', () => {
+  assert.equal(isModernGlobeView('systems', 'hadean'), true);
+  assert.equal(isModernGlobeView('history', 'cenozoic'), true);
+  for (const era of ['hadean', 'archean', 'proterozoic', 'paleozoic', 'mesozoic'] as const) {
+    assert.equal(isModernGlobeView('history', era), false);
+  }
+  assert.equal(isModernGlobeView('interior', 'cenozoic'), false);
+  assert.equal(isModernGlobeView('atmosphere', 'cenozoic'), false);
+});
 
 test('3D globe uses a modest mobile sharpness boost with GPU-safe caps', () => {
   assert.equal(getRenderPixelRatio('systems', 3, true, false), 1.75);
