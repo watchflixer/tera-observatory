@@ -56,13 +56,36 @@ const LANDMASS_POLYGONS: Array<Array<[number, number]>> = [
   ],
 ];
 
+// Stylized snapshots, not precise plate reconstructions. A late Paleozoic
+// Pangaea and a Mesozoic breakup help distinguish these very long eras.
 const PANGAEA_POLYGONS: Array<Array<[number, number]>> = [
   [
-    [-45, 62], [-15, 70], [20, 68], [55, 58], [75, 42], [65, 22], [45, 10],
-    [35, -10], [45, -35], [25, -55], [-5, -62], [-35, -58], [-55, -38], [-50, -12],
-    [-62, 12], [-55, 38], [-45, 62],
+    [-72, 48], [-61, 62], [-42, 67], [-20, 72], [5, 69], [26, 64], [49, 61],
+    [68, 53], [89, 47], [103, 35], [93, 26], [77, 27], [67, 19], [55, 22],
+    [46, 15], [35, 14], [24, 5], [31, -5], [44, -10], [48, -23], [37, -31],
+    [34, -43], [18, -54], [-1, -61], [-18, -58], [-30, -49], [-37, -36],
+    [-49, -31], [-53, -17], [-48, -5], [-58, 4], [-70, 17], [-76, 32], [-72, 48],
   ],
-  [[-125, 20], [-105, 30], [-95, 15], [-115, 10], [-125, 20]],
+  [[-115, 28], [-103, 35], [-91, 30], [-88, 19], [-101, 13], [-114, 18]],
+  [[116, 18], [127, 25], [136, 21], [133, 11], [120, 9]],
+];
+
+const MESOZOIC_POLYGONS: Array<Array<[number, number]>> = [
+  // Separated Laurasian and Gondwanan fragments with a young Atlantic.
+  [[-116, 60], [-98, 69], [-75, 67], [-59, 59], [-51, 46], [-48, 32],
+    [-57, 20], [-72, 16], [-80, 22], [-93, 24], [-105, 35], [-113, 48]],
+  [[-63, 12], [-49, 9], [-39, 1], [-34, -12], [-39, -25], [-46, -39],
+    [-55, -45], [-62, -33], [-68, -17], [-71, -2]],
+  [[-31, 54], [-20, 64], [0, 67], [20, 62], [39, 64], [61, 56], [81, 52],
+    [105, 44], [120, 36], [115, 26], [101, 24], [87, 16], [72, 18], [60, 11],
+    [46, 15], [37, 24], [19, 28], [6, 35], [-9, 33], [-24, 40]],
+  [[-25, 21], [-10, 28], [7, 27], [20, 19], [29, 7], [28, -8], [20, -20],
+    [15, -31], [4, -38], [-9, -36], [-17, -25], [-24, -12], [-27, 3]],
+  [[47, -10], [57, -5], [65, -12], [63, -24], [53, -28], [47, -20]],
+  [[83, -28], [96, -22], [112, -24], [120, -34], [110, -42], [92, -43], [82, -37]],
+  [[-44, -58], [-25, -54], [-5, -57], [14, -56], [31, -60], [50, -62],
+    [63, -68], [53, -76], [25, -80], [-4, -78], [-27, -75], [-45, -68]],
+  [[134, 14], [143, 18], [150, 12], [148, 5], [140, 3]],
 ];
 
 function hash2D(x: number, y: number): number {
@@ -275,8 +298,9 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
   const H = 512;
 
   const landMask = drawPolygonsToMask(LANDMASS_POLYGONS, W, H, 4);
-  // The Pangaea mask is only needed for the Paleozoic view.
+  // Historical masks are generated lazily and cached only when visited.
   let pangaeaMask: Uint8ClampedArray | undefined;
+  let mesozoicMask: Uint8ClampedArray | undefined;
 
   const albedoCanvas = document.createElement('canvas');
   albedoCanvas.width = W;
@@ -544,11 +568,15 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
   const buildEraTexture = (era: HistoryEraId): THREE.CanvasTexture => {
     if (era === 'cenozoic') return modernAlbedo;
     if (era === 'paleozoic' && !pangaeaMask) {
-      pangaeaMask = drawPolygonsToMask(PANGAEA_POLYGONS, W, H, 5);
+      pangaeaMask = drawPolygonsToMask(PANGAEA_POLYGONS, W, H, 4);
+    }
+    if (era === 'mesozoic' && !mesozoicMask) {
+      mesozoicMask = drawPolygonsToMask(MESOZOIC_POLYGONS, W, H, 4);
     }
 
-    const ew = 512;
-    const eh = 256;
+    const isDetailedEra = era === 'paleozoic' || era === 'mesozoic';
+    const ew = isDetailedEra ? 768 : 512;
+    const eh = ew / 2;
     const c = document.createElement('canvas');
     c.width = ew;
     c.height = eh;
@@ -563,8 +591,10 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
         const sx = Math.floor((x / ew) * W);
         const sy = Math.floor((y / eh) * H);
         const maskIdx = (sy * W + sx) * 4;
-        const n1 = fbm(x * 0.045, y * 0.045, 4);
-        const n2 = fbm(x * 0.12 + 31, y * 0.12 + 11, 3);
+        const nx = x * 512 / ew;
+        const ny = y * 256 / eh;
+        const n1 = fbm(nx * 0.045, ny * 0.045, 4);
+        const n2 = fbm(nx * 0.12 + 31, ny * 0.12 + 11, 3);
 
         let r = 0;
         let g = 0;
@@ -598,30 +628,32 @@ export function createEarthTextures(maxAnisotropy: number): EarthTextureBundle {
             g = Math.round(228 + n1 * 25);
             b = Math.round(245 + n1 * 10);
           }
-        } else if (era === 'paleozoic') {
-          const pMask = pangaeaMask![maskIdx] / 255 + (n1 - 0.5) * 0.25;
-          if (pMask > 0.52) {
-            const inland = Math.min(1, (pMask - 0.52) * 2.2);
-            r = Math.round(52 + inland * 88);
-            g = Math.round(108 + (1 - inland) * 28);
-            b = Math.round(44 + inland * 24);
+        } else if (era === 'paleozoic' || era === 'mesozoic') {
+          const coastX = Math.max(0, Math.min(W - 1, sx + Math.round((n1 - 0.45) * 40)));
+          const coastY = Math.max(0, Math.min(H - 1, sy + Math.round((n2 - 0.4) * 30)));
+          const coastIndex = (coastY * W + coastX) * 4;
+          const mask = (era === 'paleozoic' ? pangaeaMask! : mesozoicMask!)[coastIndex] / 255;
+          const coast = mask + (n1 - 0.45) * 0.18;
+          if (coast < 0.50) {
+            // Deep blue oceans fade into turquoise continental shelves.
+            const shelf = Math.max(0, Math.min(1, (coast - 0.04) / 0.46));
+            const variation = n1 * 12 + n2 * 7;
+            r = Math.round(7 + shelf * 28 + variation * 0.22);
+            g = Math.round(35 + shelf * 76 + variation);
+            b = Math.round(78 + shelf * 70 + variation * 1.2);
           } else {
-            r = 12;
-            g = 48 + Math.round(n1 * 24);
-            b = 104 + Math.round(n1 * 28);
-          }
-        } else if (era === 'mesozoic') {
-          const modernLand = landMask[maskIdx] / 255;
-          const elevation = modernLand + (n1 - 0.5) * 0.24;
-          if (elevation > 0.56) {
-            r = Math.round(40 + n2 * 38);
-            g = Math.round(112 + n1 * 34);
-            b = Math.round(46 + n2 * 18);
-          } else {
-            const shelf = Math.max(0, Math.min(1, (elevation - 0.35) / 0.21));
-            r = Math.round(12 + shelf * 24);
-            g = Math.round(58 + shelf * 68);
-            b = Math.round(115 + shelf * 70);
+            // Varied forests, drier inland terrain and light rocky ridges.
+            const climate = fbm(nx * 0.017 + 17, ny * 0.017 + 43, 3);
+            const dryBelt = Math.exp(-Math.pow((absLat - 27) / 19, 2));
+            const dryness = Math.max(0, Math.min(1,
+              (climate - 0.23) * 1.45 + dryBelt * (era === 'paleozoic' ? 0.42 : 0.23)
+              - (era === 'mesozoic' ? 0.15 : 0)));
+            const ridge = Math.pow(Math.max(0, 1 - Math.abs(n1 - 0.55) * 10), 3) * 0.15;
+            const polar = Math.max(0, (absLat - 66) / 24) * (era === 'paleozoic' ? 0.23 : 0.08);
+            const texture = (n2 - 0.4) * 32;
+            r = Math.round(40 + dryness * 113 + ridge * 75 + polar * 90 + texture);
+            g = Math.round(87 + dryness * 38 + ridge * 65 + polar * 85 + texture);
+            b = Math.round(46 + dryness * 38 + ridge * 66 + polar * 88 + texture * 0.7);
           }
         }
 

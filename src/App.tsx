@@ -3,7 +3,8 @@ import { ControlDock } from './components/ControlDock';
 import { DossierPanel } from './components/DossierPanel';
 import { EarthViewport } from './components/EarthViewport';
 import type { AtlasSectionTab } from './components/LifeHistoryAtlas';
-import { ShopButton } from './components/ShopButton';
+import { AboutButton } from './components/AboutButton';
+import { AboutPage } from './components/AboutPage';
 
 import { TopBar } from './components/TopBar';
 import {
@@ -24,34 +25,24 @@ import {
   type InspectedLocation,
 } from './utils/geocoding';
 
-const isShopHash = () => /^#shop(?:-(?:plans|terms|privacy|sources))?$/.test(window.location.hash);
-const ShopPage = lazy(() => import('./components/ShopPage').then((module) => ({ default: module.ShopPage })));
+const isAboutHash = () => /^#(?:about(?:-(?:overview|donate|terms|privacy|sources))?|shop(?:-(?:plans|terms|privacy|sources))?)$/.test(window.location.hash);
 const LifeHistoryAtlas = lazy(() => import('./components/LifeHistoryAtlas').then((module) => ({ default: module.LifeHistoryAtlas })));
 const ExtinctAtlasModal = lazy(() => import('./components/ExtinctAtlasModal').then((module) => ({ default: module.ExtinctAtlasModal })));
 
-function LoadingOverlay({ onBack }: { onBack: () => void }) {
-  return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-[#101010] text-neutral-200" role="status">
-      <p>Loading…</p>
-      <button type="button" onClick={onBack} className="rounded-md border border-neutral-600 px-4 py-2 text-sm hover:border-[#e0a43b]">Back</button>
-    </div>
-  );
-}
-
 export default function App() {
-  const [shopOpen, setShopOpen] = useState(isShopHash);
-  const [observatoryMounted, setObservatoryMounted] = useState(() => !isShopHash());
+  const [aboutOpen, setAboutOpen] = useState(isAboutHash);
+  const [observatoryMounted, setObservatoryMounted] = useState(() => !isAboutHash());
   useEffect(() => {
     const syncRoute = () => {
-      const nextShopOpen = isShopHash();
-      if (!nextShopOpen) setObservatoryMounted(true);
-      setShopOpen(nextShopOpen);
+      const nextAboutOpen = isAboutHash();
+      if (!nextAboutOpen) setObservatoryMounted(true);
+      setAboutOpen(nextAboutOpen);
     };
     window.addEventListener('hashchange', syncRoute);
     return () => window.removeEventListener('hashchange', syncRoute);
   }, []);
 
-  // When arriving directly at the shop, let its UI paint before preparing the
+  // When arriving directly at the about page, let its UI paint before preparing the
   // globe in the background. Once mounted, retain the scene for quick returns.
   useEffect(() => {
     if (observatoryMounted) return;
@@ -115,7 +106,7 @@ export default function App() {
   // Keyboard shortcut 'H' for Zen Mode (Full View) and responsive mobile dossier behavior
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isShopHash() || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (isAboutHash() || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key.toLowerCase() === 'h') {
         setZenMode((z) => !z);
       }
@@ -374,7 +365,7 @@ export default function App() {
       showAsteroids,
       autoRotate,
       dossierOpen,
-      paused: shopOpen || extinctModalOpen || lifeAtlasOpen,
+      paused: aboutOpen || extinctModalOpen || lifeAtlasOpen,
     }),
     [
       mode,
@@ -397,13 +388,13 @@ export default function App() {
       dossierOpen,
       extinctModalOpen,
       lifeAtlasOpen,
-      shopOpen,
+      aboutOpen,
     ]
   );
 
-  const handleCloseShop = useCallback(() => {
+  const handleCloseAbout = useCallback(() => {
     setObservatoryMounted(true);
-    setShopOpen(false);
+    setAboutOpen(false);
     window.location.hash = '';
   }, []);
 
@@ -412,9 +403,9 @@ export default function App() {
       {observatoryMounted && (
         <main
           className="relative w-screen h-screen overflow-hidden bg-[#000000]"
-          style={{ visibility: shopOpen ? 'hidden' : 'visible' }}
-          aria-hidden={shopOpen}
-          inert={shopOpen}
+          style={{ visibility: aboutOpen ? 'hidden' : 'visible' }}
+          aria-hidden={aboutOpen}
+          inert={aboutOpen}
           data-mode={mode}
           data-interior={selectedInterior}
           data-atmosphere={selectedAtmosphere}
@@ -445,7 +436,7 @@ export default function App() {
             zenMode={zenMode}
           />
 
-          {!zenMode && <ShopButton onOpen={() => { setShopOpen(true); window.location.hash = 'shop'; }} />}
+          {!zenMode && <AboutButton onOpen={() => { setAboutOpen(true); window.location.hash = 'about'; }} />}
 
           <DossierPanel
             mode={mode}
@@ -508,9 +499,9 @@ export default function App() {
           />
 
           {extinctLoaded && (
-            <Suspense fallback={extinctModalOpen && !shopOpen ? <LoadingOverlay onBack={() => setExtinctModalOpen(false)} /> : null}>
+            <Suspense fallback={null}>
               <ExtinctAtlasModal
-                open={extinctModalOpen && !shopOpen}
+                open={extinctModalOpen && !aboutOpen}
                 onClose={() => setExtinctModalOpen(false)}
                 onOpenInTerapedia={(entryId) => {
                   setExtinctModalOpen(false);
@@ -520,8 +511,8 @@ export default function App() {
             </Suspense>
           )}
 
-          {lifeAtlasOpen && !shopOpen && (
-            <Suspense fallback={<LoadingOverlay onBack={() => setLifeAtlasOpen(false)} />}>
+          {lifeAtlasOpen && !aboutOpen && (
+            <Suspense fallback={null}>
               <LifeHistoryAtlas
                 open
                 onClose={() => setLifeAtlasOpen(false)}
@@ -537,11 +528,7 @@ export default function App() {
           )}
         </main>
       )}
-      {shopOpen && (
-        <Suspense fallback={<LoadingOverlay onBack={handleCloseShop} />}>
-          <ShopPage onBack={handleCloseShop} />
-        </Suspense>
-      )}
+      {aboutOpen && <AboutPage onBack={handleCloseAbout} />}
     </>
   );
 }

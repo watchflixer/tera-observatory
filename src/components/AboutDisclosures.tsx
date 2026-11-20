@@ -12,43 +12,40 @@ const sources = [
   { name: 'Magnific AI', note: 'The creator reports using Magnific for AI-generated videos. The applicable plan, creation-date terms and commercial rights for each video must be checked.', href: 'https://www.magnific.com/ai/docs/ai-content-and-copyright' },
 ];
 
-export function ShopDisclosures() {
+export function AboutDisclosures() {
   return (
     <section className="mt-12 border-t border-white/10 pt-10 sm:mt-16" aria-label="About this website, draft terms, privacy and credits">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><p className="shop-eyebrow">03 / ABOUT &amp; TRANSPARENCY</p><h2 className="mt-2 font-display text-2xl font-semibold text-white">The whole picture.</h2><p className="mt-2 text-sm text-[#aaa29e]">What this website does, how it uses services, and where its materials come from.</p></div>
-        <nav aria-label="Website information" className="flex flex-wrap gap-4 text-xs font-medium text-[#e2b87e]"><a href="#shop-terms">Terms</a><a href="#shop-privacy">Privacy</a><a href="#shop-sources">Rights &amp; credits</a></nav>
+        <div><p className="shop-eyebrow">ABOUT &amp; TRANSPARENCY</p><h2 className="mt-2 font-display text-2xl font-semibold text-white">The whole picture.</h2><p className="mt-2 text-sm text-[#aaa29e]">What this website does, how it uses services, and where its materials come from.</p></div>
+        <nav aria-label="Website information" className="flex flex-wrap gap-4 text-xs font-medium text-[#e2b87e]"><a href="#about-terms">Terms</a><a href="#about-privacy">Privacy</a><a href="#about-sources">Rights &amp; credits</a></nav>
       </div>
       <div role="note" className="mt-5 flex gap-3 rounded-xl border border-[#d6a264]/25 bg-[#d6a264]/[0.07] p-4 text-xs leading-5 text-[#e3cfb4]"><ShieldCheck className="h-4 w-4 shrink-0" /><p><strong>Draft information for review, not legal clearance.</strong> The operator’s identity and contact, payment and refund rules, actual privacy practices and individual asset licenses are not yet confirmed. This page is not a complete rights clearance or a final legal policy.</p></div>
 
-      <article className="shop-legal-card mt-6">
+      <article id="about-overview" className="shop-legal-card mt-6 scroll-mt-8">
         <div className="flex items-center gap-2 text-[#e5b474]"><Globe2 className="h-4 w-4" /><span className="shop-eyebrow">ABOUT THE WEBSITE</span></div>
         <h3>Explore Earth, life and deep time.</h3>
         <p>Terra Observatory is an interactive educational and exploratory website. Its globe presents Earth’s surface and planetary systems alongside visualizations of its interior, atmosphere and geological history. The Field Guide provides context and controls, and visitors can explore locations, landmarks, maps, cloud cover, rotation, tectonic features, satellites and asteroids.</p>
         <p>TerraPedia connects visitors to encyclopedia articles, search, languages and image galleries. The extinct-life showcase presents species and habitats using illustrations, reconstructions, videos and sound. Some views are modeled or artistic representations, not live observations. Images, scientific figures, maps and descriptions may be simplified, incomplete or out of date; they are not a substitute for navigation, safety advice or professional research.</p>
-        <p>The Shop presents proposed paid plans and an optional donation option. Payments and donations are not active, and the site currently does not provide the plan benefits described in the preview.</p>
+        <p>This page also explains the project, its sources and the intended optional donation feature. Donations are not currently active.</p>
       </article>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <article id="shop-terms" className="shop-legal-card scroll-mt-24">
+        <article id="about-terms" className="shop-legal-card scroll-mt-24">
           <div className="flex items-center gap-2 text-[#e5b474]"><Layers3 className="h-4 w-4" /><span className="shop-eyebrow">TERMS OF USE / DRAFT</span></div>
           <h3>Using Terra Observatory</h3>
           <h4>Scope and responsible use</h4>
           <p>These draft terms describe the website and proposed services; they are not a final agreement. Visitors should use the site lawfully, avoid disrupting or overloading it or its providers, and respect third-party terms, copyrights and privacy. Automated or bulk use may also be restricted by the underlying services.</p>
           <h4>Educational content and availability</h4>
           <p>The site is intended for general education and exploration. Information and imagery can contain errors or change without notice. Features depend on browser support, internet access and outside providers and may be unavailable or changed. No specific uptime, accuracy or performance level has been established.</p>
-          <h4>Plans and payments</h4>
-          <p>The proposed plans are Weekly at ₱50 with a 100 limit per day and slow speed; Monthly at ₱200 with a 600 limit per day and fast speed; and Yearly at ₱2,200 with a 20,000 limit per month and smooth, fast speed. They are a preview, not an offer to charge: checkout, plan access, limits and speed tiers are not implemented. The unit counted, reset rules and actual service levels remain undefined.</p>
-          <p>The intended purpose of a plan payment is to purchase the corresponding website plan once a real service is established. No payment is currently accepted. Before launch, the operator must identify the payment provider and recipient and publish the actual benefits, billing dates, whether renewal is automatic, taxes or fees, cancellation process, refunds and support contact. A MariBank account alone does not activate a payment service.</p>
           <h4>Donations</h4>
-          <p>Donations are intended as optional support for the project and are separate from plan purchases; they do not currently grant plan access. The donation button is disabled and no donation provider is connected. The operator must confirm the recipient, use of funds and applicable refund policy before accepting donations.</p>
+          <p>Donations are intended as optional support for the project. The donation button is disabled and no donation provider is connected, so no donation is currently accepted through this page. Before accepting donations, the operator must identify the recipient and provider and confirm the intended use of funds, any fees and applicable refund policy. A MariBank account alone does not connect a donation service.</p>
           <h4>Ownership and links</h4>
           <p>Project materials and third-party materials may have different owners and licenses. No project-wide license or ownership claim is established here. Visitors must obtain any permissions needed for copying, commercial use or redistribution; links to other sites do not imply endorsement or transfer of rights. See Rights &amp; credits below.</p>
           <h4>Operator and questions</h4>
-          <p>Operator name, business or legal details, support contact, applicable jurisdiction and final consumer terms are pending. These details and the final policy need legal review before selling or collecting donations.</p>
+          <p>Operator name, business or legal details, support contact, applicable jurisdiction and final consumer terms are pending. These details and the final policy need legal review before collecting donations.</p>
         </article>
 
-        <article id="shop-privacy" className="shop-legal-card scroll-mt-24">
+        <article id="about-privacy" className="shop-legal-card scroll-mt-24">
           <div className="flex items-center gap-2 text-[#e5b474]"><LockKeyhole className="h-4 w-4" /><span className="shop-eyebrow">PRIVACY / DRAFT</span></div>
           <h3>How information is used</h3>
           <h4>What the current site sends</h4>
@@ -56,7 +53,7 @@ export function ShopDisclosures() {
           <p>When you search for a place or inspect a location, the browser sends the place name or selected map coordinates to Nominatim to obtain a result. Those coordinates describe the location you select, not necessarily your physical location. The current source does not request the browser’s device geolocation permission.</p>
           <p>When you use TerraPedia, article titles, search terms, selected language and related image queries are sent to Wikipedia or Wikimedia Commons. Images and thumbnails may be loaded from Wikimedia servers. Searches could contain personal information, so avoid entering sensitive details.</p>
           <h4>Storage, accounts and payments</h4>
-          <p>The inspected application code keeps some location and encyclopedia results in memory while it runs. Browsers and service providers may independently cache resources or keep logs; their retention periods have not been verified. The current Shop has no account registration, payment form or donation processor. No site-specific analytics or advertising integration was identified in the inspected source; this is not a statement about all host or provider logging.</p>
+          <p>The inspected application code keeps some location and encyclopedia results in memory while it runs. Browsers and service providers may independently cache resources or keep logs; their retention periods have not been verified. The current site has no account registration, payment form or donation processor. No site-specific analytics or advertising integration was identified in the inspected source; this is not a statement about all host or provider logging.</p>
           <p>If accounts, payment or donations are added, the operator must explain what information is collected, why, the payment provider and recipients, legal basis, safeguards, international transfers and retention periods before processing begins. Do not send banking passwords, PINs or one-time codes through the site or to the operator.</p>
           <h4>Your choices and rights</h4>
           <p>You can avoid optional searches, leave the site, manage browser caches and settings, and consult each provider’s privacy policy. Applicable privacy laws may give you rights relating to your personal data. The operator must publish a privacy contact, how to make a request, complaint details and the actual retention and deletion practices; these are not yet supplied.</p>
@@ -64,7 +61,7 @@ export function ShopDisclosures() {
         </article>
       </div>
 
-      <article id="shop-sources" className="shop-legal-card mt-4 scroll-mt-24">
+      <article id="about-sources" className="shop-legal-card mt-4 scroll-mt-24">
         <div className="flex items-center gap-2 text-[#e5b474]"><Globe2 className="h-4 w-4" /><span className="shop-eyebrow">RIGHTS, SOURCES &amp; CREDITS</span></div>
         <h3>Materials behind the experience</h3>
         <p>Terra Observatory combines project code, illustrations, audio, video, maps and outside information. Rights are specific to each item: listing a source below does not transfer ownership or replace required attribution, license notices or permission. Third-party names and marks belong to their respective owners.</p>
