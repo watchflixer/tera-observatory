@@ -34,6 +34,7 @@ import {
   type PhotorealisticMaps,
 } from './proceduralTextures';
 import { createSpaceObjectsSystem, type SpaceObjectsSystem } from './spaceObjects';
+import { createHadeanMaterial } from './hadeanMaterial';
 
 export interface SceneControlState {
   mode: ObservatoryMode;
@@ -256,6 +257,7 @@ export class EarthScene {
   // Interior meshes
   private interiorMeshes = new Map<InteriorLayerId, THREE.Mesh>();
   private interiorMaterials = new Map<InteriorLayerId, THREE.MeshStandardMaterial>();
+  private hadeanMaterial: THREE.ShaderMaterial | null = null;
   private sliceCapOne: THREE.Mesh;
   private sliceCapTwo: THREE.Mesh;
   private cloudsMesh: THREE.Mesh;
@@ -1028,8 +1030,18 @@ export class EarthScene {
     const era = HISTORY_ERAS.find((e) => e.id === eraId) ?? HISTORY_ERAS[5];
     const isModern = eraId === 'cenozoic';
     const isSatellite = this.state.leafletBaseLayer === 'satellite';
+    const crust = this.interiorMeshes.get('crust');
+    if (eraId === 'hadean') {
+      this.hadeanMaterial ??= createHadeanMaterial();
+      if (crust) crust.material = this.hadeanMaterial;
+    } else if (crust) {
+      crust.material = crustMat;
+    }
 
-    if (isModern && this.leafletTex) {
+    if (eraId === 'hadean') {
+      // The animated material replaces the static historical map only for Hadean.
+      this.nightUniforms.uUseNightLights.value = 0.0;
+    } else if (isModern && this.leafletTex) {
       crustMat.map = this.leafletTex.map;
       crustMat.roughnessMap = isSatellite ? this.leafletTex.roughnessMap : null;
       crustMat.bumpMap = isSatellite ? (this.photoMaps?.derivedBumpMap ?? this.textures.bumpMap) : null;
@@ -1045,10 +1057,12 @@ export class EarthScene {
       this.nightUniforms.uUseNightLights.value = 1.0;
     } else {
       crustMat.map = this.textures.getHistoryMap(eraId);
-      crustMat.roughnessMap = eraId === 'hadean' ? null : this.textures.roughnessMap;
-      crustMat.bumpMap = this.textures.bumpMap;
-      crustMat.bumpScale = 0.03;
-      crustMat.roughness = eraId === 'proterozoic' ? 0.52 : eraId === 'hadean' ? 0.94 : 0.85;
+      // Modern-continent relief would leave misleading shapes on historical maps.
+      const isAncientContinents = eraId === 'paleozoic' || eraId === 'mesozoic';
+      crustMat.roughnessMap = isAncientContinents ? null : this.textures.roughnessMap;
+      crustMat.bumpMap = isAncientContinents ? null : this.textures.bumpMap;
+      crustMat.bumpScale = isAncientContinents ? 0 : 0.03;
+      crustMat.roughness = eraId === 'proterozoic' ? 0.52 : 0.85;
       this.nightUniforms.uUseNightLights.value = 0.0;
     }
 
@@ -1094,8 +1108,10 @@ export class EarthScene {
       }
     });
 
-    // Atmosphere shell visibility & highlight
+    // Show atmospheric layers in Atmosphere, without the bands in other views.
     const atmoMode = this.state.mode === 'atmosphere';
+    const hideAtmosphereBands = !atmoMode;
+    this.rayleighHaloMesh.visible = !hideAtmosphereBands;
     ATMOSPHERE_LAYERS.forEach((layer, idx) => {
       const mesh = this.atmosphereMeshes.get(layer.id);
       const mat = this.atmosphereMaterials.get(layer.id);
@@ -1108,16 +1124,16 @@ export class EarthScene {
         mat.uniforms.uPower.value = isSelected ? 2.1 : 3.4;
         mat.uniforms.uOpacity.value = isSelected ? 1.0 : 0.55;
       } else {
-        // Subtle natural blue limb atmosphere on normal views
-        mesh.visible = idx === 0 || idx === 1;
+        mesh.visible = false;
         mat.uniforms.uIntensity.value = idx === 0 ? 1.05 : 0.45;
         mat.uniforms.uPower.value = idx === 0 ? 3.4 : 4.2;
         mat.uniforms.uOpacity.value = idx === 0 ? 0.85 : 0.35;
       }
     });
 
+    // Hide the polar aurora curtains in 3D Globe and Atmosphere only.
     this.auroraGroup.visible =
-      atmoMode || this.state.showMagnetosphere || this.state.mode === 'systems';
+      this.state.mode !== 'systems' && !atmoMode && this.state.showMagnetosphere;
     this.spaceObjects.satellitesRoot.visible =
       (atmoMode &&
         (this.state.selectedAtmosphere === 'thermosphere' ||
@@ -1366,6 +1382,9 @@ export class EarthScene {
       const delta = Math.min((now - this.lastMs) / 1000, 0.1);
       this.lastMs = now;
       const elapsed = (now - this.startMs) / 1000;
+      if (this.state.mode === 'history' && this.state.selectedHistory === 'hadean' && this.hadeanMaterial) {
+        this.hadeanMaterial.uniforms.uTime.value += delta;
+      }
 
       // Smooth cutaway wedge & explosion transitions
       this.smoothCutawayDeg = THREE.MathUtils.damp(
@@ -1564,6 +1583,9 @@ export class EarthScene {
       }
     });
 
+    // One of these may be detached from the crust when the scene is disposed.
+    this.hadeanMaterial?.dispose();
+    this.interiorMaterials.get('crust')?.dispose();
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement === this.container) {
       this.container.removeChild(this.renderer.domElement);
